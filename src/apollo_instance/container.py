@@ -2,6 +2,7 @@ import os
 import shlex
 import subprocess
 import time
+from typing import cast
 
 import docker
 from loguru import logger
@@ -47,7 +48,7 @@ class Container:
 
         try:
             container = self.docker_client.containers.get(self.name)
-            return container.status == "running"
+            return bool(container.status == "running")
         except docker.errors.NotFound:
             return False
 
@@ -100,7 +101,7 @@ class Container:
         if detach:
             return ""
         if not stream:
-            return exec_stream.output.decode("utf-8", errors="ignore")
+            return cast(str, exec_stream.output.decode("utf-8", errors="ignore"))
 
         output = []
 

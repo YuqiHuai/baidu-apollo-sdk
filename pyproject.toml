@@ -17,6 +17,8 @@ where = ["src"]
 
 [dependency-groups]
 dev = [
+    "mypy>=1.19.0",
+    "pytest>=9.0.2",
     "ruff>=0.15.12",
 ]
 
@@ -37,3 +39,13 @@ select = [
 quote-style = "double"
 indent-style = "space"
 line-ending = "auto"
+
+[tool.mypy]
+python_version = "3.12"
+files = ["src", "tests"]
+strict = true
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
