@@ -12,6 +12,9 @@ dependencies = [
     "websocket-client>=1.9.0",
 ]
 
+[tool.setuptools.package-data]
+apollo_instance = ["scripts/*.sh"]
+
 [tool.setuptools.packages.find]
 where = ["src"]
 

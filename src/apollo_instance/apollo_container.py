@@ -1,6 +1,7 @@
 import os
-import shlex
 import subprocess
+from importlib.resources import files
+from pathlib import Path
 from typing import cast
 
 import docker
@@ -8,11 +9,14 @@ from loguru import logger
 
 
 class ApolloContainer:
-    def __init__(self, name: str):
+    DEV_CONTAINER_PREFIX = "apollo_dev_"
+
+    def __init__(self, name: str, apollo_path: str):
         self.name = name
+        self.apollo_path = apollo_path
         self.docker_client = docker.from_env()
 
-    def start(self) -> bool:
+    def start(self, verbose: bool = False) -> bool:
         """
         Start the container.
 
@@ -26,17 +30,23 @@ class ApolloContainer:
             RuntimeError: If the container fails to start.
         """
         logger.info(f"{self.name}: Starting container")
-        cmd = (
-            "bash /home/yuqi/ResearchWorkspace/ICSE_2027/"
-            "apollo-v11.0.0/docker/scripts/dev_start.sh -l"
+        script_path = files("apollo_instance.scripts") / "dev_start.sh"
+        if not script_path.exists():
+            raise RuntimeError(f"Script not found: {script_path}")
+
+        apollo_docker_scripts_dir = Path(self.apollo_path, "docker", "scripts")
+        cmd = f"bash {script_path} -y -l --name {self.name}"
+        subprocess.run(
+            cmd,
+            env={
+                "CURR_DIR": apollo_docker_scripts_dir,
+                "USER": os.environ.get("USER"),
+            },
+            shell=True,
+            capture_output=not verbose,
         )
-        process = subprocess.Popen(
-            shlex.split(cmd), stdout=subprocess.PIPE, stderr=subprocess.PIPE
-        )
-        _, stderr = process.communicate()
-        if process.returncode != 0:
-            raise RuntimeError(f"Failed to start container: {stderr.decode('utf-8')}")
-        return True
+        if not self.is_running():
+            raise RuntimeError("Failed to start container")
 
     def is_running(self) -> bool:
         """Check if the container is running.
@@ -46,10 +56,19 @@ class ApolloContainer:
         """
 
         try:
-            container = self.docker_client.containers.get(self.name)
+            container = self.docker_client.containers.get(self.container_name)
             return bool(container.status == "running")
         except docker.errors.NotFound:
             return False
+
+    @property
+    def container_name(self) -> str:
+        """Get the container name.
+
+        Returns:
+            The container name, which is the prefix plus the name.
+        """
+        return self.DEV_CONTAINER_PREFIX + self.name
 
     @property
     def ip_address(self) -> str:
@@ -59,7 +78,7 @@ class ApolloContainer:
             The IP address of the container, or "localhost" if it cannot be determined.
         """
 
-        container = self.docker_client.containers.get(self.name)
+        container = self.docker_client.containers.get(self.container_name)
         networks = container.attrs["NetworkSettings"]["Networks"]
         ip_address = ""
         if networks and len(networks) > 0:
@@ -83,7 +102,7 @@ class ApolloContainer:
             The output of the command if detach is False, otherwise an empty string.
         """
         logger.info(f"{self.name}: Executing command: {command}")
-        container = self.docker_client.containers.get(self.name)
+        container = self.docker_client.containers.get(self.container_name)
         user = os.environ.get("USER")
         assert user is not None, "USER environment variable is not set"
         exec_stream = container.exec_run(
@@ -106,6 +125,7 @@ class ApolloContainer:
 
         for chunk in exec_stream.output:
             text = chunk.decode("utf-8", errors="ignore")
+            print(text, end="", flush=True)  # 👈 THIS is the key
             output.append(text)
 
         return "".join(output)

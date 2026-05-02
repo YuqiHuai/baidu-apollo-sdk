@@ -4,7 +4,6 @@ import time
 from loguru import logger
 
 from apollo_instance.apollo_container import ApolloContainer
-from apollo_instance.apollo_manager import ApolloManager
 from apollo_instance.apollo_repo import ApolloRepo
 from apollo_instance.apollo_runtime import ApolloRuntime
 from apollo_instance.dreamview import (
@@ -27,17 +26,17 @@ logger.add(
     ),
 )
 
-ctn = ApolloContainer("apollo_dev_yuqi")
-run_time = ApolloRuntime(ctn)
-ctn.start()
-
-manager = ApolloManager(
-    repo=ApolloRepo(),
-    runtime=run_time,
+repo = ApolloRepo(
+    "git@github.com:YuqiHuai/BaiduApollo.git",
+    "/home/yuqi/ResearchWorkspace/ICSE_2027/apollo-v11.0.0",
+    branch="fix/dreamview_plus_traffic_light",
 )
 
-manager.setup(restart=True)
-manager.bootstrap()
+ctn = ApolloContainer("apollo_dev_yuqi", repo.get_path())
+run_time = ApolloRuntime(ctn)
+run_time.ensure_container(restart=True)
+run_time.bootstrap()
+
 
 def run_scenario(ctn: ApolloContainer):
     dw = Dreamview(ctn)
@@ -50,7 +49,6 @@ def run_scenario(ctn: ApolloContainer):
 
     run_time = ApolloRuntime(ctn)
     run_time.wait_for_node("sim_perfect_control", 0.5)
-    
 
     dw.set_start_point(586971.7121059963, 4141267.3710500454, 1.1354430516425942)
 
@@ -82,5 +80,8 @@ def run_scenario(ctn: ApolloContainer):
     run_time.stop_recorder()
     dw.stop_module("Planning")
     dw.set_operation(DreamviewOperations.RECORD)
+
+    print(f"http://{ctn.ip_address}:8888")
+
 
 run_scenario(ctn)
