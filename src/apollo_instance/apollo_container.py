@@ -1,14 +1,13 @@
 import os
 import shlex
 import subprocess
-import time
 from typing import cast
 
 import docker
 from loguru import logger
 
 
-class Container:
+class ApolloContainer:
     def __init__(self, name: str):
         self.name = name
         self.docker_client = docker.from_env()
@@ -115,77 +114,3 @@ class Container:
         """Reset the container by killing all processes except PID 1."""
         logger.info(f"{self.name}: Resetting container.")
         self.exec_command("bash -c \"kill -9 $(ps -eo pid= | awk '$1 != 1')\"")
-
-    def start_recorder(self, record_name: str, segment_duration: int = 3600) -> None:
-        """Start recording cyber data in the container.
-
-        Args:
-            record_name: The name of the record file.
-            segment_duration: The duration of each segment in seconds.
-                Default is 3600 seconds (1 hour).
-        """
-        logger.info(f"{self.name}: Starting recorder: {record_name}.")
-        recorder_bin = "/apollo/bazel-bin/cyber/tools/cyber_recorder/cyber_recorder"
-        record_command = (
-            f"{recorder_bin} record -a -o /apollo/data/bag/{record_name} "
-            f"-i {segment_duration}"
-        )
-        self.exec_command(record_command, detach=True)
-
-    def stop_recorder(self) -> None:
-        """Stop all running recorders in the container."""
-        logger.info(f"{self.name}: Stopping recorder.")
-        self.exec_command("bash -c 'pgrep -f cyber_recorder | xargs -r kill -2'")
-
-    def list_cyber_nodes(self) -> list[str]:
-        """List all cyber nodes in the container.
-
-        Returns:
-            A list of cyber node names.
-        """
-        cyber_node_bin = "/apollo/bazel-bin/cyber/tools/cyber_node/cyber_node"
-        output = self.exec_command(f"{cyber_node_bin} list")
-        lines = output.strip().split("\n")
-        nodes = []
-        skipping = True
-        for line in lines:
-            if line.startswith("Number of active nodes:"):
-                skipping = False
-                continue
-            if skipping:
-                continue
-            if line.strip() == "":
-                continue
-            nodes.append(line.strip())
-        return nodes
-
-    def wait_for_node(
-        self,
-        node_name: str,
-        poll_interval: float = 1.0,
-        timeout: float | None = None,
-    ) -> None:
-        """Wait for a specific cyber node to be running in the container.
-
-        Args:
-            node_name: The name of the cyber node to wait for.
-            poll_interval: The interval in seconds between checks.
-                Default is 1.0 second.
-            timeout: The maximum time to wait in seconds. If None, wait
-                indefinitely. Default is None.
-
-        Raises:
-            TimeoutError: If the specified node does not start within the
-                timeout period.
-        """
-
-        start_time = time.perf_counter()
-        while True:
-            nodes = self.list_cyber_nodes()
-            if node_name in nodes:
-                break
-            time.sleep(poll_interval)
-            if timeout is not None and (time.perf_counter() - start_time) > timeout:
-                raise TimeoutError(
-                    f"Timeout while waiting for node '{node_name}' to be running."
-                )

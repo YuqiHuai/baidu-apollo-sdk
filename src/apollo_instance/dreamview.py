@@ -64,48 +64,12 @@ class Dreamview:
 
     def set_mode(self, mode: str) -> bool:
         assert mode in DreamviewModes.__dict__.values(), f"Unsupported mode: {mode}"
-
-        # payload = {
-        #     "data": {
-        #         "name": "",
-        #         "info": {"action": "CHANGE_MODE", "value": mode},
-        #         "source": "dreamview",
-        #         "target": "dreamview",
-        #         "sourceType": "module",
-        #         "targetType": "dreamview",
-        #         "requestId": "noResponse",
-        #     },
-        #     "type": "HMIAction",
-        #     "action": "request",
-        # }
         payload = get_hmi_action_request_payload("CHANGE_MODE", mode, "noResponse")
-
         logger.info(f"{self.ctn.ip_address}: Switching Dreamview mode to {mode}")
         self._socket().send(json.dumps(payload))
 
-        # waits for response with "action": "metadata"
-        while True:
-            response = self._socket().recv()
-            response_json = json.loads(response)
-            if response_json.get("action") == "metadata":
-                logger.info(f"{self.ctn.ip_address}: Switched Dreamview mode to {mode}")
-                return True
-
     def start_module(self, module_name: str) -> None:
         _request_id = nanoid.generate()
-        # payload = {
-        #     "data": {
-        #         "name": "",
-        #         "info": {"action": "START_MODULE", "value": module_name},
-        #         "source": "dreamview",
-        #         "target": "dreamview",
-        #         "sourceType": "module",
-        #         "targetType": "dreamview",
-        #         "requestId": f"HMIAction!{_request_id}",
-        #     },
-        #     "type": f"HMIAction",
-        #     "action": "request",
-        # }
         payload = get_hmi_action_request_payload(
             "START_MODULE", module_name, f"HMIAction!{_request_id}"
         )
@@ -114,19 +78,6 @@ class Dreamview:
 
     def stop_module(self, module_name: str) -> None:
         _request_id = nanoid.generate()
-        # payload = {
-        #     "data": {
-        #         "name": "",
-        #         "info": {"action": "STOP_MODULE", "value": module_name},
-        #         "source": "dreamview",
-        #         "target": "dreamview",
-        #         "sourceType": "module",
-        #         "targetType": "dreamview",
-        #         "requestId": f"HMIAction!{_request_id}",
-        #     },
-        #     "type": "HMIAction",
-        #     "action": "request",
-        # }
         payload = get_hmi_action_request_payload(
             "STOP_MODULE", module_name, f"HMIAction!{_request_id}"
         )
@@ -137,31 +88,15 @@ class Dreamview:
         assert operation in DreamviewOperations.__dict__.values(), (
             f"Unsupported operation: {operation}"
         )
-
         _request_id = nanoid.generate()
-        # payload = {
-        #     "data": {
-        #         "name": "",
-        #         "info": {"action": "CHANGE_OPERATION", "value": operation},
-        #         "source": "dreamview",
-        #         "target": "dreamview",
-        #         "sourceType": "module",
-        #         "targetType": "dreamview",
-        #         "requestId": f"HMIAction!{_request_id}",
-        #     },
-        #     "type": "HMIAction",
-        #     "action": "request",
-        # }
         payload = get_hmi_action_request_payload(
             "CHANGE_OPERATION", operation, f"HMIAction!{_request_id}"
         )
-
         # send the request
         logger.info(
             f"{self.ctn.ip_address}: Setting Dreamview operation to {operation}"
         )
         self._socket().send(json.dumps(payload))
-
         # Wait for the matching HMIAction response.
         while True:
             response = self._socket().recv()
@@ -202,27 +137,11 @@ class Dreamview:
             "Mkz Lgsvl 321",
             "Nuscenes 165",
         ]
-        # payload = {
-        #     "data": {
-        #         "name": "",
-        #         "info": {"action": "CHANGE_VEHICLE", "value": vehicle},
-        #         "source": "dreamview",
-        #         "target": "dreamview",
-        #         "sourceType": "module",
-        #         "targetType": "dreamview",
-        #         "requestId": "noResponse",
-        #     },
-        #     "type": "HMIAction",
-        #     "action": "request",
-        #     "requestId": "asdasd",
-        # }
         payload = get_hmi_action_request_payload(
             "CHANGE_VEHICLE", vehicle, "noResponse"
         )
-
         logger.info(f"{self.ctn.ip_address}: Setting Dreamview vehicle to {vehicle}")
         self._socket().send(json.dumps(payload))
-
         # wait for the response
         while True:
             response = self._socket().recv()
@@ -255,17 +174,14 @@ class Dreamview:
             "type": "CheckRoutingPoint",
             "action": "request",
         }
-
         logger.info(
             f"{self.ctn.ip_address}: Checking routing point ({x}, {y}, {heading})"
         )
         self._socket().send(json.dumps(payload))
-
         # wait for the response
         while True:
             response = self._socket().recv()
             response_json = json.loads(response)
-
             # Wait for the matching CheckRoutingPoint response.
             if (
                 response_json.get("action") == "response"
@@ -313,7 +229,6 @@ class Dreamview:
             "type": "SetStartPoint",
             "action": "request",
         }
-
         # check the point legality first
         if not self.check_routing_point(x, y, heading):
             logger.error(
@@ -321,13 +236,11 @@ class Dreamview:
                 f"({x}, {y}, {heading}) due to illegal point"
             )
             return False
-
         # send the request
         logger.info(
             f"{self.ctn.ip_address}: Setting start point to ({x}, {y}, {heading})"
         )
         self._socket().send(json.dumps(payload))
-
         # wait for the response
         while True:
             response = self._socket().recv()
@@ -362,7 +275,6 @@ class Dreamview:
                     f"illegal waypoint format: {waypoint}"
                 )
                 return False
-
         # validate waypoints are valid routing points
         for waypoint in waypoints:
             if not self.check_routing_point(
@@ -376,9 +288,7 @@ class Dreamview:
                     f"illegal waypoint {waypoint_text}"
                 )
                 return False
-
         _request_id = nanoid.generate()
-
         payload = {
             "data": {
                 "name": "",
@@ -402,12 +312,10 @@ class Dreamview:
             "type": "SendRoutingRequest",
             "action": "request",
         }
-
         logger.info(
             f"{self.ctn.ip_address}: Starting routing with {len(waypoints)} waypoints"
         )
         self._socket().send(json.dumps(payload))
-
         # wait for response
         while True:
             response = self._socket().recv()
@@ -434,19 +342,6 @@ class Dreamview:
                     return True
 
     def load_dynamic_models(self) -> None:
-        # payload = {
-        #     "data": {
-        #         "name": "",
-        #         "info": {"action": "LOAD_DYNAMIC_MODELS"},
-        #         "source": "dreamview",
-        #         "target": "dreamview",
-        #         "sourceType": "module",
-        #         "targetType": "dreamview",
-        #         "requestId": "noResponse",
-        #     },
-        #     "type": "HMIAction",
-        #     "action": "request",
-        # }
         payload = get_hmi_action_request_payload(
             "LOAD_DYNAMIC_MODELS", "", "noResponse"
         )
@@ -454,26 +349,9 @@ class Dreamview:
         self._socket().send(json.dumps(payload))
 
     def change_dynamic_model(self) -> None:
-        # payload = {
-        #     "data": {
-        #         "name": "",
-        #         "info": {
-        #             "action": "CHANGE_DYNAMIC_MODEL",
-        #             "value": "Simulation Perfect Control",
-        #         },
-        #         "source": "dreamview",
-        #         "target": "dreamview",
-        #         "sourceType": "module",
-        #         "targetType": "dreamview",
-        #         "requestId": "noResponse",
-        #     },
-        #     "type": "HMIAction",
-        #     "action": "request",
-        # }
         payload = get_hmi_action_request_payload(
             "CHANGE_DYNAMIC_MODEL", "Simulation Perfect Control", "noResponse"
         )
-
         logger.info(
             f"{self.ctn.ip_address}: Changing dynamic model to "
             "Simulation Perfect Control"
