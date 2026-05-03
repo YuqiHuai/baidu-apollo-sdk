@@ -15,7 +15,7 @@ def main() -> None:
     cyber_bridge = CyberBridge(container.ip_address)
     bridge_client = CyberClient(cyber_bridge)
 
-    messages = bridge_client.subscribe(channel=Topics.LocalizationTopic)
+    messages = bridge_client.subscribe(topic=Topics.LocalizationTopic)
 
     current_time = time.perf_counter()
 

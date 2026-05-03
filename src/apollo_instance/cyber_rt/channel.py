@@ -5,7 +5,10 @@ type Decoder[T] = Callable[[bytes], T]
 
 
 @dataclass(frozen=True)
-class Channel[T]:
+class Topic[T]:
     channel: str
     msg_type: str
     decoder: Decoder[T]
+
+
+Channel = Topic

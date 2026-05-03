@@ -15,8 +15,8 @@ def main() -> None:
     cyber_bridge = CyberBridge(container.ip_address)
     bridge_client = CyberClient(cyber_bridge)
 
-    latest_loc = bridge_client.subscribe_latest(channel=Topics.LocalizationTopic)
-    latest_chassis = bridge_client.subscribe_latest(channel=Topics.ChassisTopic)
+    latest_loc = bridge_client.subscribe_latest(topic=Topics.LocalizationTopic)
+    latest_chassis = bridge_client.subscribe_latest(topic=Topics.ChassisTopic)
 
     current_time = time.perf_counter()
     last_loc_raw: bytes | None = None

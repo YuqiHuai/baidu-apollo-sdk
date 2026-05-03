@@ -20,7 +20,7 @@ from baidu_apollo_proto.v11.modules.common_msgs.routing_msgs import (
 )
 from google.protobuf.message import Message
 
-from .channel import Channel
+from .channel import Topic
 from .decoder import decode_proto
 
 Chassis: type[Message] = cast(type[Message], chassis_pb2.Chassis)
@@ -51,37 +51,37 @@ RoutingRequest: type[Message] = cast(type[Message], routing_pb2.RoutingRequest)
 
 
 class Topics:
-    ChassisTopic: Channel[Message] = Channel(
+    ChassisTopic: Topic[Message] = Topic(
         "/apollo/canbus/chassis",
         "apollo.canbus.Chassis",
         decode_proto(Chassis),
     )
 
-    LocalizationTopic: Channel[Message] = Channel(
+    LocalizationTopic: Topic[Message] = Topic(
         "/apollo/localization/pose",
         "apollo.localization.LocalizationEstimate",
         decode_proto(LocalizationEstimate),
     )
 
-    ObstaclesTopic: Channel[Message] = Channel(
+    ObstaclesTopic: Topic[Message] = Topic(
         "/apollo/perception/obstacles",
         "apollo.perception.PerceptionObstacles",
         decode_proto(PerceptionObstacles),
     )
 
-    TrafficLightTopic: Channel[Message] = Channel(
+    TrafficLightTopic: Topic[Message] = Topic(
         "/apollo/perception/traffic_light",
         "apollo.perception.TrafficLightDetection",
         decode_proto(TrafficLightDetection),
     )
 
-    PlanningTopic: Channel[Message] = Channel(
+    PlanningTopic: Topic[Message] = Topic(
         "/apollo/planning",
         "apollo.planning.ADCTrajectory",
         decode_proto(ADCTrajectory),
     )
 
-    RoutingRequestTopic: Channel[Message] = Channel(
+    RoutingRequestTopic: Topic[Message] = Topic(
         "/apollo/routing_request",
         "apollo.routing.RoutingRequest",
         decode_proto(RoutingRequest),

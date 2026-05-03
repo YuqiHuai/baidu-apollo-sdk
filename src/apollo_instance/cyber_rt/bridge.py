@@ -6,7 +6,7 @@ from collections.abc import Callable
 from threading import Thread
 from typing import Any
 
-from .channel import Channel
+from .channel import Topic
 
 logger = logging.getLogger(__name__)
 
@@ -84,40 +84,40 @@ class CyberBridge:
 
     def add_subscriber(
         self,
-        channel: Channel[Any],
+        topic: Topic[Any],
         cb: Callable[[bytes], None],
     ) -> None:
         """
         Adds a subscriber to the bridge
 
-        :param Channel channel: the channel to subscribe from
+        :param Topic topic: the topic to subscribe from
         :param Function cb: callback function that takes parsed data from bridge
         """
-        topic_msg_type = channel.msg_type
+        topic_msg_type = topic.msg_type
 
         data = BridgeOp.AddReader
-        data += self.__prepare_bytes(to_bytes(channel.channel))
+        data += self.__prepare_bytes(to_bytes(topic.channel))
         data += self.__prepare_bytes(to_bytes(topic_msg_type))
 
         self.conn.send(data)
-        self.subscribers[channel.channel].append(cb)
+        self.subscribers[topic.channel].append(cb)
 
-    def add_publisher(self, channel: Channel[Any]) -> None:
+    def add_publisher(self, topic: Topic[Any]) -> None:
         """
         Adds a publisher to the bridge
 
-        :param Channel channel: the channel to publish message to
+        :param Topic topic: the topic to publish message to
         """
-        if channel.channel in self.publishable_channel:
+        if topic.channel in self.publishable_channel:
             return
 
-        topic_msg_type = channel.msg_type
+        topic_msg_type = topic.msg_type
 
         data = BridgeOp.AddWriter
-        data += self.__prepare_bytes(to_bytes(channel.channel))
+        data += self.__prepare_bytes(to_bytes(topic.channel))
         data += self.__prepare_bytes(to_bytes(topic_msg_type))
         self.conn.send(data)
-        self.publishable_channel.add(channel.channel)
+        self.publishable_channel.add(topic.channel)
 
     def on_read(self, data: bytes) -> None:
         """
@@ -167,18 +167,18 @@ class CyberBridge:
         for subscriber in self.subscribers[topic]:
             subscriber(msg)
 
-    def publish(self, channel: Channel[Any], data: bytes) -> None:
+    def publish(self, topic: Topic[Any], data: bytes) -> None:
         """
         Publish data to the bridge
 
-        :param Channel channel: channel to publish data to
+        :param Topic topic: topic to publish data to
         :param bytes data: data to be published
 
         :note: You should register a publisher first before publishing any data
         """
         assert type(data) is bytes
         msg = BridgeOp.Publish
-        msg += self.__prepare_bytes(to_bytes(channel.channel))
+        msg += self.__prepare_bytes(to_bytes(topic.channel))
         msg += self.__prepare_bytes(data)
         self.conn.send(msg)
 

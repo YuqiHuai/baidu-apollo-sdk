@@ -1,11 +1,12 @@
 import time
+
 from apollo_instance.apollo_container import ApolloContainer
 from apollo_instance.apollo_repo import ApolloRepo
 from apollo_instance.apollo_runtime import ApolloRuntime
-from apollo_instance.cyber_rt.client import CyberClient
 from apollo_instance.cyber_rt.bridge import CyberBridge
+from apollo_instance.cyber_rt.client import CyberClient
 from apollo_instance.cyber_rt.topics import Topics
-from apollo_instance.dreamview import Dreamview, DreamviewModes, DreamviewOperations, DreamviewVehicles
+
 repo = ApolloRepo.from_config()
 
 repo.clone(True)
@@ -20,16 +21,22 @@ bridge_client = CyberClient(cyber_bridge)
 
 
 current_time = time.perf_counter()
-latest_loc = bridge_client.subscribe_latest(channel=Topics.LocalizationTopic)
+latest_loc = bridge_client.subscribe_latest(topic=Topics.LocalizationTopic)
 bridge_client.start()
-print('Subscribed to localization topic, waiting for messages...')
+print("Subscribed to localization topic, waiting for messages...")
 while True:
     if time.perf_counter() - current_time > 5:
-        print('Exiting')
+        print("Exiting")
         break
     raw = latest_loc.get(block=False)
     if raw is not None:
         loc = Topics.LocalizationTopic.decoder(raw)
-        print(f"Received localization message: position=({loc.pose.position.x}, {loc.pose.position.y}, {loc.pose.position.z}), timestamp={loc.header.timestamp_sec} ")
-        
+        print(
+            "Received localization message: "
+            f"position=({loc.pose.position.x}, "
+            f"{loc.pose.position.y}, "
+            f"{loc.pose.position.z}), "
+            f"timestamp={loc.header.timestamp_sec}"
+        )
+
 bridge_client.stop()

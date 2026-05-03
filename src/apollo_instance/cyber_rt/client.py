@@ -5,7 +5,7 @@ from collections.abc import Callable, Iterator
 from typing import Any
 
 from .bridge import CyberBridge
-from .channel import Channel
+from .channel import Topic
 
 
 class LatestValue:
@@ -68,23 +68,23 @@ class CyberClient:
     # Publish
     # -----------------------
 
-    def publish(self, channel: Channel[Any], msg: bytes) -> None:
-        ch = channel.channel
+    def publish(self, topic: Topic[Any], msg: bytes) -> None:
+        ch = topic.channel
 
         if ch not in self._publishers:
-            self.bridge.add_publisher(channel)
+            self.bridge.add_publisher(topic)
             self._publishers.add(ch)
 
-        self.bridge.publish(channel, msg)
+        self.bridge.publish(topic, msg)
 
     # -----------------------
     # Subscription internals
     # -----------------------
 
-    def _ensure_subscription(self, channel: Channel[Any]) -> None:
+    def _ensure_subscription(self, topic: Topic[Any]) -> None:
         """Ensure only one bridge-level subscription per channel."""
 
-        ch = channel.channel
+        ch = topic.channel
 
         if ch in self._bridge_subscribed:
             return
@@ -93,14 +93,14 @@ class CyberClient:
             for cb in self._callbacks[ch]:
                 cb(msg)
 
-        self.bridge.add_subscriber(channel, bridge_callback)
+        self.bridge.add_subscriber(topic, bridge_callback)
         self._bridge_subscribed.add(ch)
 
     # -----------------------
     # Streaming subscription
     # -----------------------
 
-    def subscribe(self, channel: Channel[Any]) -> Iterator[bytes]:
+    def subscribe(self, topic: Topic[Any]) -> Iterator[bytes]:
         """
         Stream messages from a channel.
 
@@ -118,8 +118,8 @@ class CyberClient:
                     pass
             q.put(msg)
 
-        self._ensure_subscription(channel)
-        self._callbacks[channel.channel].append(callback)
+        self._ensure_subscription(topic)
+        self._callbacks[topic.channel].append(callback)
 
         while self.bridge.spinning:
             yield q.get()
@@ -128,7 +128,7 @@ class CyberClient:
     # Latest-value subscription
     # -----------------------
 
-    def subscribe_latest(self, channel: Channel[Any]) -> LatestValue:
+    def subscribe_latest(self, topic: Topic[Any]) -> LatestValue:
         """
         Subscribe to only the most recent value of a channel.
 
@@ -140,6 +140,6 @@ class CyberClient:
         def callback(msg: bytes) -> None:
             latest.set(msg)
 
-        self._ensure_subscription(channel)
-        self._callbacks[channel.channel].append(callback)
+        self._ensure_subscription(topic)
+        self._callbacks[topic.channel].append(callback)
         return latest
