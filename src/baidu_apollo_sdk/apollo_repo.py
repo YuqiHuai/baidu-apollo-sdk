@@ -59,8 +59,8 @@ class ApolloRepo:
         """Clone the repository if not already cloned.
 
         Args:
-            stream: If True, stream the output of the git command to the console.
-                Default is False (capture output).
+            stream: If True, stream the output of the git command to the
+                console. Default is False (capture output).
         """
 
         if self.is_cloned():

@@ -63,6 +63,7 @@ class ApolloContainer:
             },
             shell=True,
             capture_output=not verbose,
+            check=False,
         )
         if not self.is_running():
             raise RuntimeError("Failed to start container")
@@ -94,7 +95,8 @@ class ApolloContainer:
         """Get the IP address of the container.
 
         Returns:
-            The IP address of the container, or "localhost" if it cannot be determined.
+            The IP address of the container, or "localhost" if it cannot be
+            determined.
         """
 
         container = self.docker_client.containers.get(self.container_name)
@@ -118,13 +120,16 @@ class ApolloContainer:
 
         Args:
             command: The command to execute.
-            detach: Whether to run the command in detached mode. Default is False.
-            stream: Whether to stream the output of the command. Default is False.
+            detach: Whether to run the command in detached mode. Default is
+                False.
+            stream: Whether to stream the output of the command. Default is
+                False.
             use_apollo_env: Whether to source Apollo's base environment before
                 running the command.
 
         Returns:
-            The output of the command if detach is False, otherwise an empty string.
+            The output of the command if detach is False, otherwise an empty
+            string.
         """
         logger.info(f"{self.name}: Executing command: {command}")
         container = self.docker_client.containers.get(self.container_name)
@@ -132,7 +137,11 @@ class ApolloContainer:
         assert user is not None, "USER environment variable is not set"
 
         if use_apollo_env:
-            cmd = 'bash -c "source /apollo/scripts/apollo_base.sh; ' + command + '"'
+            cmd = (
+                'bash -c "source /apollo/scripts/apollo_base.sh; '
+                + command
+                + '"'
+            )
         else:
             cmd = command
 
@@ -150,7 +159,9 @@ class ApolloContainer:
         if detach:
             return ""
         if not stream:
-            return cast(str, exec_stream.output.decode("utf-8", errors="ignore"))
+            return cast(
+                str, exec_stream.output.decode("utf-8", errors="ignore")
+            )
 
         output = []
 
@@ -177,7 +188,8 @@ class ApolloContainer:
         logger.info(f"{self.name}: Checking if file exists: {file_path}")
         quoted_path = shlex.quote(file_path)
         result = self.exec_command(
-            f"bash -c \"test -f {quoted_path} && echo exists || echo 'not exists'\"",
+            f'bash -c "test -f {quoted_path} && '
+            "echo exists || echo 'not exists'\"",
             use_apollo_env=False,
         )
         return result.strip() == "exists"
@@ -200,14 +212,18 @@ class ApolloContainer:
         logger.info(f"{self.name}: Removing directory: {dir_path}")
         self.exec_command(f"rm -rf {dir_path}", stream=True)
 
-    def copy_file_to_container(self, local_path: str, container_path: str) -> None:
+    def copy_file_to_container(
+        self, local_path: str, container_path: str
+    ) -> None:
         """Copy a file from the local machine to the container.
 
         Args:
             local_path: The path to the file on the local machine.
             container_path: The path to the file in the container.
         """
-        logger.info(f"{self.name}: Copying file from {local_path} to {container_path}")
+        logger.info(
+            f"{self.name}: Copying file from {local_path} to {container_path}"
+        )
         copy_status = subprocess.run(
             [
                 "docker",
@@ -224,14 +240,18 @@ class ApolloContainer:
                 f"Failed to copy file to container: {copy_status.stderr}"
             )
 
-    def copy_file_from_container(self, container_path: str, local_path: str) -> None:
+    def copy_file_from_container(
+        self, container_path: str, local_path: str
+    ) -> None:
         """Copy a file from the container to the local machine.
 
         Args:
             container_path: The path to the file in the container.
             local_path: The path to the file on the local machine.
         """
-        logger.info(f"{self.name}: Copying file from {container_path} to {local_path}")
+        logger.info(
+            f"{self.name}: Copying file from {container_path} to {local_path}"
+        )
         copy_status = subprocess.run(
             [
                 "docker",

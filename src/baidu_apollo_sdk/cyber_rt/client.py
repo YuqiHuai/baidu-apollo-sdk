@@ -73,7 +73,9 @@ class CyberClient:
         self.bridge = bridge
 
         # channel -> list of callbacks
-        self._callbacks: dict[str, list[Callable[[bytes], None]]] = defaultdict(list)
+        self._callbacks: dict[str, list[Callable[[bytes], None]]] = defaultdict(
+            list
+        )
 
         # channels subscribed at bridge level
         self._bridge_subscribed: set[str] = set()

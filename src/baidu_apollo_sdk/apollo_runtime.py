@@ -27,7 +27,8 @@ class ApolloRuntime:
         """Build Apollo inside the container.
 
         Args:
-            stream: Whether to stream the output of the build command. Default is False.
+            stream: Whether to stream the output of the build command. Default
+                is False.
 
         Raises:
             RuntimeError: If the container is not running before build.
@@ -35,7 +36,9 @@ class ApolloRuntime:
         if not self.container.is_running():
             raise RuntimeError("Container must be running before build")
 
-        console_out = self.container.exec_command("bash apollo.sh build", stream=stream)
+        console_out = self.container.exec_command(
+            "bash apollo.sh build", stream=stream
+        )
         # check if "Done building apollo. Enjoy!" is in console_out
         if "Done building apollo. Enjoy!" not in console_out:
             raise RuntimeError("Build failed. Console output:\n" + console_out)
@@ -75,7 +78,9 @@ class ApolloRuntime:
         if not self.container.is_running() or restart:
             self.container.start()
 
-    def start_recorder(self, record_name: str, segment_duration: int = 3600) -> None:
+    def start_recorder(
+        self, record_name: str, segment_duration: int = 3600
+    ) -> None:
         """Start recording cyber data in the container.
 
         Args:
@@ -83,7 +88,9 @@ class ApolloRuntime:
             segment_duration: The duration of each segment in seconds.
                 Default is 3600 seconds (1 hour).
         """
-        recorder_bin = "/apollo/bazel-bin/cyber/tools/cyber_recorder/cyber_recorder"
+        recorder_bin = (
+            "/apollo/bazel-bin/cyber/tools/cyber_recorder/cyber_recorder"
+        )
         cmd = (
             f"{recorder_bin} record -a -o /apollo/data/bag/{record_name} "
             f"-i {segment_duration}"
@@ -146,7 +153,8 @@ class ApolloRuntime:
             sleep(poll_interval)
             if timeout is not None and (perf_counter() - start_time) > timeout:
                 raise TimeoutError(
-                    f"Timeout while waiting for node '{node_name}' to be running."
+                    "Timeout while waiting for node "
+                    f"'{node_name}' to be running."
                 )
 
     def list_hd_maps(self) -> list[str]:
@@ -168,7 +176,9 @@ class ApolloRuntime:
             maps.append(line.strip())
         return maps
 
-    def install_hd_map(self, hd_map_path: str, map_name: str | None = None) -> str:
+    def install_hd_map(
+        self, hd_map_path: str, map_name: str | None = None
+    ) -> str:
         """Install a specific HD map in the container.
 
         Args:
@@ -178,8 +188,10 @@ class ApolloRuntime:
         Returns:
             The name of the installed HD map.
         Raises:
-            ValueError: If the specified map name already exists in the container.
-            RuntimeError: If the routing/sim map cannot be created for the HD map.
+            ValueError: If the specified map name already exists in the
+                container.
+            RuntimeError: If the routing/sim map cannot be created for the HD
+                map.
         """
         maps = self.list_hd_maps()
         if map_name == "":
@@ -199,7 +211,8 @@ class ApolloRuntime:
 
         # create directory under /apollo/modules/map/data with the map name
         self.container.exec_command(
-            f"mkdir -p /apollo/modules/map/data/{map_name}", use_apollo_env=False
+            f"mkdir -p /apollo/modules/map/data/{map_name}",
+            use_apollo_env=False,
         )
         # copy the HD map file to the container
         self.container.copy_file_to_container(
@@ -209,7 +222,8 @@ class ApolloRuntime:
         # run command to generate routing map and sim map
         map_dir = f"/apollo/modules/map/data/{map_name}"
         self.container.exec_command(
-            f"bash /apollo/scripts/generate_routing_topo_graph.sh --map_dir {map_dir}",
+            "bash /apollo/scripts/generate_routing_topo_graph.sh "
+            f"--map_dir {map_dir}",
             use_apollo_env=False,
         )
         self.container.exec_command(
@@ -226,9 +240,13 @@ class ApolloRuntime:
         )
 
         if not routing_map_created:
-            raise RuntimeError(f"Failed to create routing map for HD map '{map_name}'")
+            raise RuntimeError(
+                f"Failed to create routing map for HD map '{map_name}'"
+            )
         if not sim_map_created:
-            raise RuntimeError(f"Failed to create sim map for HD map '{map_name}'")
+            raise RuntimeError(
+                f"Failed to create sim map for HD map '{map_name}'"
+            )
 
         return map_name
 
@@ -243,10 +261,12 @@ class ApolloRuntime:
         # check if map_id is valid
         maps = self.list_hd_maps()
         if map_id not in maps:
-            raise ValueError(f"Map ID '{map_id}' is not valid. Available maps: {maps}")
+            raise ValueError(
+                f"Map ID '{map_id}' is not valid. Available maps: {maps}"
+            )
 
         configuration_string = f"--map_dir=/apollo/modules/map/data/{map_id}"
-        # write configuration string to /apollo/modules/common/data/global_flagfile.txt
+        # Write configuration to Apollo's shared global flag file.
         self.container.exec_command(
             f"bash -c \"echo '{configuration_string}'"
             ' >> /apollo/modules/common/data/global_flagfile.txt"',

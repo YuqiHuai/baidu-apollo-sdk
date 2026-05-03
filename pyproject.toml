@@ -22,13 +22,14 @@ where = ["src"]
 [dependency-groups]
 dev = [
     "mypy>=1.19.0",
+    "pylint>=4.0.5",
     "pytest>=9.0.2",
     "ruff>=0.15.12",
 ]
 
 [tool.ruff]
 target-version = "py312"
-line-length = 88
+line-length = 80
 
 [tool.ruff.lint]
 select = [

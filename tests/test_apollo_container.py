@@ -43,7 +43,9 @@ class FakeDockerContainer:
     )
     exec_calls: list[ExecRunCall] = field(default_factory=list)
     output: bytes = b"command output"
-    stream_output: list[bytes] = field(default_factory=lambda: [b"hello", b" world"])
+    stream_output: list[bytes] = field(
+        default_factory=lambda: [b"hello", b" world"]
+    )
 
     def exec_run(
         self,
@@ -98,7 +100,9 @@ def apollo_container(
     return ApolloContainer("yuqi", "/apollo/root")
 
 
-def test_container_name_adds_dev_prefix(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_container_name_adds_dev_prefix(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     container = apollo_container(monkeypatch)
 
     assert container.container_name == "apollo_dev_yuqi"
@@ -107,7 +111,9 @@ def test_container_name_adds_dev_prefix(monkeypatch: pytest.MonkeyPatch) -> None
 def test_is_running_returns_true_for_running_container(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    container = apollo_container(monkeypatch, FakeDockerContainer(status="running"))
+    container = apollo_container(
+        monkeypatch, FakeDockerContainer(status="running")
+    )
 
     assert container.is_running() is True
 
@@ -115,7 +121,9 @@ def test_is_running_returns_true_for_running_container(
 def test_is_running_returns_false_for_stopped_container(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    container = apollo_container(monkeypatch, FakeDockerContainer(status="exited"))
+    container = apollo_container(
+        monkeypatch, FakeDockerContainer(status="exited")
+    )
 
     assert container.is_running() is False
 
@@ -130,7 +138,9 @@ def test_is_running_returns_false_when_container_is_missing(
     assert container.is_running() is False
 
 
-def test_ip_address_returns_container_ip(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_ip_address_returns_container_ip(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     container = apollo_container(monkeypatch)
 
     assert container.ip_address == "172.17.0.2"
@@ -216,7 +226,9 @@ def test_exec_command_collects_streamed_output(
     assert docker_container.exec_calls[0].stream is True
 
 
-def test_reset_kills_processes_except_pid_one(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_reset_kills_processes_except_pid_one(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     docker_container = FakeDockerContainer()
     container = apollo_container(monkeypatch, docker_container)
     monkeypatch.setenv("USER", "alice")
@@ -224,7 +236,9 @@ def test_reset_kills_processes_except_pid_one(monkeypatch: pytest.MonkeyPatch) -
     container.reset()
 
     command = docker_container.exec_calls[0].command
-    assert command.startswith('bash -c "source /apollo/scripts/apollo_base.sh; ')
+    assert command.startswith(
+        'bash -c "source /apollo/scripts/apollo_base.sh; '
+    )
     assert "kill -9 $(ps -eo pid= | awk '$1 != 1')" in command
 
 
@@ -258,7 +272,9 @@ def test_remove_file_runs_rm_command(monkeypatch: pytest.MonkeyPatch) -> None:
     assert "rm -f /apollo/file.txt" in docker_container.exec_calls[0].command
 
 
-def test_remove_directory_streams_rm_command(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_remove_directory_streams_rm_command(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     docker_container = FakeDockerContainer()
     container = apollo_container(monkeypatch, docker_container)
     monkeypatch.setenv("USER", "alice")
@@ -284,7 +300,9 @@ def test_copy_file_to_container_runs_docker_cp(
         return subprocess.CompletedProcess(cmd, 0, "", "")
 
     container = apollo_container(monkeypatch)
-    monkeypatch.setattr("baidu_apollo_sdk.apollo_container.subprocess.run", fake_run)
+    monkeypatch.setattr(
+        "baidu_apollo_sdk.apollo_container.subprocess.run", fake_run
+    )
 
     container.copy_file_to_container("/tmp/local.txt", "/apollo/remote.txt")
 
@@ -313,7 +331,9 @@ def test_copy_file_from_container_runs_docker_cp(
         return subprocess.CompletedProcess(cmd, 0, "", "")
 
     container = apollo_container(monkeypatch)
-    monkeypatch.setattr("baidu_apollo_sdk.apollo_container.subprocess.run", fake_run)
+    monkeypatch.setattr(
+        "baidu_apollo_sdk.apollo_container.subprocess.run", fake_run
+    )
 
     container.copy_file_from_container("/apollo/remote.txt", "/tmp/local.txt")
 
@@ -342,7 +362,9 @@ def test_start_runs_packaged_dev_start_script(
         env: dict[str, str],
         shell: bool,
         capture_output: bool,
+        check: bool,
     ) -> subprocess.CompletedProcess[str]:
+        assert check is False
         calls.append((cmd, env, shell, capture_output))
         return subprocess.CompletedProcess(cmd, 0, "", "")
 
@@ -350,7 +372,9 @@ def test_start_runs_packaged_dev_start_script(
         "baidu_apollo_sdk.apollo_container.files",
         lambda package: tmp_path,
     )
-    monkeypatch.setattr("baidu_apollo_sdk.apollo_container.subprocess.run", fake_run)
+    monkeypatch.setattr(
+        "baidu_apollo_sdk.apollo_container.subprocess.run", fake_run
+    )
     monkeypatch.setenv("USER", "alice")
 
     container.start()
@@ -395,7 +419,9 @@ def test_start_raises_when_user_is_missing(
     )
     monkeypatch.delenv("USER", raising=False)
 
-    with pytest.raises(RuntimeError, match="USER environment variable is not set"):
+    with pytest.raises(
+        RuntimeError, match="USER environment variable is not set"
+    ):
         container.start()
 
 
@@ -413,14 +439,18 @@ def test_start_raises_when_container_does_not_start(
         env: dict[str, str],
         shell: bool,
         capture_output: bool,
+        check: bool,
     ) -> subprocess.CompletedProcess[str]:
+        assert check is False
         return subprocess.CompletedProcess(cmd, 0, "", "")
 
     monkeypatch.setattr(
         "baidu_apollo_sdk.apollo_container.files",
         lambda package: tmp_path,
     )
-    monkeypatch.setattr("baidu_apollo_sdk.apollo_container.subprocess.run", fake_run)
+    monkeypatch.setattr(
+        "baidu_apollo_sdk.apollo_container.subprocess.run", fake_run
+    )
     monkeypatch.setenv("USER", "alice")
 
     with pytest.raises(RuntimeError, match="Failed to start container"):
@@ -453,7 +483,9 @@ def test_container_checks_file_existence_in_available_container(
     apollo_test_container: ApolloContainer,
 ) -> None:
     assert (
-        apollo_test_container.check_file_exists("/apollo/scripts/apollo_base.sh")
+        apollo_test_container.check_file_exists(
+            "/apollo/scripts/apollo_base.sh"
+        )
         is True
     )
     assert (
@@ -476,7 +508,9 @@ def test_container_copies_file_to_and_from_available_container(
     local_source.write_text(f"container-copy-{token}", encoding="utf-8")
 
     try:
-        apollo_test_container.copy_file_to_container(str(local_source), container_path)
+        apollo_test_container.copy_file_to_container(
+            str(local_source), container_path
+        )
         assert apollo_test_container.check_file_exists(container_path) is True
 
         apollo_test_container.copy_file_from_container(

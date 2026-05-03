@@ -13,6 +13,7 @@ Run linting and formatting checks:
 ```bash
 uv run ruff check .
 uv run ruff format --check .
+uv run pylint --rcfile=pylintrc src/baidu_apollo_sdk
 ```
 
 Run type checks:

@@ -50,7 +50,9 @@ class FakeContainer:
         )
         return self.command_outputs.get(command, "")
 
-    def copy_file_to_container(self, local_path: str, container_path: str) -> None:
+    def copy_file_to_container(
+        self, local_path: str, container_path: str
+    ) -> None:
         self.copied_files.append((local_path, container_path))
 
     def check_file_exists(self, file_path: str) -> bool:
@@ -79,7 +81,9 @@ def test_build_raises_when_success_marker_is_missing() -> None:
 
 def test_build_runs_apollo_build_command() -> None:
     container = FakeContainer()
-    container.command_outputs["bash apollo.sh build"] = "Done building apollo. Enjoy!"
+    container.command_outputs["bash apollo.sh build"] = (
+        "Done building apollo. Enjoy!"
+    )
 
     runtime_for(container).build(stream=True)
 
@@ -105,17 +109,24 @@ def test_list_cyber_nodes_skips_summary_and_blank_lines() -> None:
         "/apollo/bazel-bin/cyber/tools/cyber_node/cyber_node list"
     ] = "header\nNumber of active nodes: 2\n\n/planning\n /prediction \n"
 
-    assert runtime_for(container).list_cyber_nodes() == ["/planning", "/prediction"]
+    assert runtime_for(container).list_cyber_nodes() == [
+        "/planning",
+        "/prediction",
+    ]
 
 
 def test_list_hd_maps_returns_map_directory_names() -> None:
     container = FakeContainer()
     find_command = (
-        "find /apollo/modules/map/data -maxdepth 1 -mindepth 1 -type d -printf '%f\\n'"
+        "find /apollo/modules/map/data -maxdepth 1"
+        " -mindepth 1 -type d -printf '%f\\n'"
     )
     container.command_outputs[find_command] = "\nborregas_ave\nsunnyvale\n\n"
 
-    assert runtime_for(container).list_hd_maps() == ["borregas_ave", "sunnyvale"]
+    assert runtime_for(container).list_hd_maps() == [
+        "borregas_ave",
+        "sunnyvale",
+    ]
     assert container.commands == [
         CommandCall(find_command, use_apollo_env=False),
     ]
@@ -124,11 +135,14 @@ def test_list_hd_maps_returns_map_directory_names() -> None:
 def test_install_hd_map_rejects_duplicate_map_name() -> None:
     container = FakeContainer()
     container.command_outputs[
-        "find /apollo/modules/map/data -maxdepth 1 -mindepth 1 -type d -printf '%f\\n'"
+        "find /apollo/modules/map/data -maxdepth 1"
+        " -mindepth 1 -type d -printf '%f\\n'"
     ] = "borregas_ave\n"
 
     with pytest.raises(ValueError, match="already exists"):
-        runtime_for(container).install_hd_map("/tmp/base_map.txt", "borregas_ave")
+        runtime_for(container).install_hd_map(
+            "/tmp/base_map.txt", "borregas_ave"
+        )
 
 
 def test_install_hd_map_copies_map_and_generates_outputs() -> None:
@@ -140,7 +154,9 @@ def test_install_hd_map_copies_map_and_generates_outputs() -> None:
         f"{map_dir}/sim_map.bin",
     }
 
-    result = runtime_for(container).install_hd_map("/tmp/base_map.txt", map_name)
+    result = runtime_for(container).install_hd_map(
+        "/tmp/base_map.txt", map_name
+    )
 
     assert result == map_name
     assert container.copied_files == [("/tmp/base_map.txt", f"{map_dir}/")]
@@ -152,7 +168,8 @@ def test_install_hd_map_copies_map_and_generates_outputs() -> None:
         ),
         CommandCall(f"mkdir -p {map_dir}", use_apollo_env=False),
         CommandCall(
-            f"bash /apollo/scripts/generate_routing_topo_graph.sh --map_dir {map_dir}",
+            "bash /apollo/scripts/generate_routing_topo_graph.sh "
+            f"--map_dir {map_dir}",
             use_apollo_env=False,
         ),
         CommandCall(
@@ -177,20 +194,25 @@ def test_install_hd_map_generates_name_when_missing(
         lambda alphabet, size: map_name,
     )
 
-    assert runtime_for(container).install_hd_map("/tmp/base_map.txt") == map_name
+    assert (
+        runtime_for(container).install_hd_map("/tmp/base_map.txt") == map_name
+    )
 
 
 def test_install_hd_map_raises_when_generated_files_are_missing() -> None:
     container = FakeContainer()
 
     with pytest.raises(RuntimeError, match="Failed to create routing map"):
-        runtime_for(container).install_hd_map("/tmp/base_map.txt", "missing_outputs")
+        runtime_for(container).install_hd_map(
+            "/tmp/base_map.txt", "missing_outputs"
+        )
 
 
 def test_set_hd_map_validates_map_and_writes_global_flag() -> None:
     container = FakeContainer()
     container.command_outputs[
-        "find /apollo/modules/map/data -maxdepth 1 -mindepth 1 -type d -printf '%f\\n'"
+        "find /apollo/modules/map/data -maxdepth 1"
+        " -mindepth 1 -type d -printf '%f\\n'"
     ] = "borregas_ave\n"
 
     runtime_for(container).set_hd_map("borregas_ave")
@@ -242,4 +264,6 @@ def test_runtime_lists_cyber_nodes_in_available_container(
     nodes = runtime.list_cyber_nodes()
 
     assert isinstance(nodes, list)
-    assert all(node_name.strip() == node_name and node_name for node_name in nodes)
+    assert all(
+        node_name.strip() == node_name and node_name for node_name in nodes
+    )

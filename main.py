@@ -41,7 +41,9 @@ def run_scenario(ctn: ApolloContainer):
     run_time = ApolloRuntime(ctn)
     run_time.wait_for_node("sim_perfect_control", 0.5)
 
-    dw.set_start_point(586971.7121059963, 4141267.3710500454, 1.1354430516425942)
+    dw.set_start_point(
+        586971.7121059963, 4141267.3710500454, 1.1354430516425942
+    )
 
     dw.start_module("Planning")
     # check for planning node running for 5 seconds

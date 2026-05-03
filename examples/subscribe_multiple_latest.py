@@ -23,7 +23,9 @@ def main() -> None:
     last_chassis_raw: bytes | None = None
 
     bridge_client.start()
-    print("Subscribed to localization and chassis topics, waiting for messages...")
+    print(
+        "Subscribed to localization and chassis topics, waiting for messages..."
+    )
 
     try:
         while time.perf_counter() - current_time <= 5:

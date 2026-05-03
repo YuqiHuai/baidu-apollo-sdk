@@ -19,7 +19,9 @@ def get_apollo_root() -> Path:
     """
     value = os.environ.get("APOLLO_ROOT")
     if not value:
-        raise RuntimeError("APOLLO_ROOT is not set. Add it to .env or export it.")
+        raise RuntimeError(
+            "APOLLO_ROOT is not set. Add it to .env or export it."
+        )
     return Path(value).expanduser().resolve()
 
 
@@ -34,7 +36,9 @@ def get_apollo_git_url() -> str:
     """
     value = os.environ.get("APOLLO_GIT_URL")
     if not value:
-        raise RuntimeError("APOLLO_GIT_URL is not set. Add it to .env or export it.")
+        raise RuntimeError(
+            "APOLLO_GIT_URL is not set. Add it to .env or export it."
+        )
     return value
 
 

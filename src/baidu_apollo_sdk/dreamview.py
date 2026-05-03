@@ -115,9 +115,15 @@ class Dreamview:
         Raises:
             AssertionError: If the mode is unsupported.
         """
-        assert mode in DreamviewModes.__dict__.values(), f"Unsupported mode: {mode}"
-        payload = get_hmi_action_request_payload("CHANGE_MODE", mode, "noResponse")
-        logger.info(f"{self.ctn.ip_address}: Switching Dreamview mode to {mode}")
+        assert mode in DreamviewModes.__dict__.values(), (
+            f"Unsupported mode: {mode}"
+        )
+        payload = get_hmi_action_request_payload(
+            "CHANGE_MODE", mode, "noResponse"
+        )
+        logger.info(
+            f"{self.ctn.ip_address}: Switching Dreamview mode to {mode}"
+        )
         self._socket().send(json.dumps(payload))
 
     def start_module(self, module_name: str) -> None:
@@ -126,9 +132,9 @@ class Dreamview:
         Args:
             module_name: Dreamview module name.
         """
-        _request_id = nanoid.generate()
+        request_id = nanoid.generate()
         payload = get_hmi_action_request_payload(
-            "START_MODULE", module_name, f"HMIAction!{_request_id}"
+            "START_MODULE", module_name, f"HMIAction!{request_id}"
         )
         logger.info(f"{self.ctn.ip_address}: Starting module {module_name}")
         self._socket().send(json.dumps(payload))
@@ -139,9 +145,9 @@ class Dreamview:
         Args:
             module_name: Dreamview module name.
         """
-        _request_id = nanoid.generate()
+        request_id = nanoid.generate()
         payload = get_hmi_action_request_payload(
-            "STOP_MODULE", module_name, f"HMIAction!{_request_id}"
+            "STOP_MODULE", module_name, f"HMIAction!{request_id}"
         )
         logger.info(f"{self.ctn.ip_address}: Stopping module {module_name}")
         self._socket().send(json.dumps(payload))
@@ -161,9 +167,9 @@ class Dreamview:
         assert operation in DreamviewOperations.__dict__.values(), (
             f"Unsupported operation: {operation}"
         )
-        _request_id = nanoid.generate()
+        request_id = nanoid.generate()
         payload = get_hmi_action_request_payload(
-            "CHANGE_OPERATION", operation, f"HMIAction!{_request_id}"
+            "CHANGE_OPERATION", operation, f"HMIAction!{request_id}"
         )
         # send the request
         logger.info(
@@ -177,7 +183,7 @@ class Dreamview:
             if (
                 response_json.get("action") == "response"
                 and response_json.get("data", {}).get("requestId")
-                == f"HMIAction!{_request_id}"
+                == f"HMIAction!{request_id}"
             ):
                 # Warn when Dreamview returns a failed operation response.
                 if (
@@ -187,7 +193,8 @@ class Dreamview:
                     .get("isOk", False)
                 ):
                     logger.info(
-                        f"{self.ctn.ip_address}: Set Dreamview operation to {operation}"
+                        f"{self.ctn.ip_address}: Set Dreamview operation "
+                        f"to {operation}"
                     )
                 else:
                     message = (
@@ -224,7 +231,9 @@ class Dreamview:
         payload = get_hmi_action_request_payload(
             "CHANGE_VEHICLE", vehicle, "noResponse"
         )
-        logger.info(f"{self.ctn.ip_address}: Setting Dreamview vehicle to {vehicle}")
+        logger.info(
+            f"{self.ctn.ip_address}: Setting Dreamview vehicle to {vehicle}"
+        )
         self._socket().send(json.dumps(payload))
         # wait for the response
         while True:
@@ -247,7 +256,7 @@ class Dreamview:
         Returns:
             True if Dreamview reports the routing point as legal.
         """
-        _request_id = nanoid.generate()
+        request_id = nanoid.generate()
         payload = {
             "data": {
                 "name": "",
@@ -263,13 +272,14 @@ class Dreamview:
                 "target": "dreamview",
                 "sourceType": "module",
                 "targetType": "dreamview",
-                "requestId": f"CheckRoutingPoint!{_request_id}",
+                "requestId": f"CheckRoutingPoint!{request_id}",
             },
             "type": "CheckRoutingPoint",
             "action": "request",
         }
         logger.info(
-            f"{self.ctn.ip_address}: Checking routing point ({x}, {y}, {heading})"
+            f"{self.ctn.ip_address}: Checking routing point "
+            f"({x}, {y}, {heading})"
         )
         self._socket().send(json.dumps(payload))
         # wait for the response
@@ -280,21 +290,27 @@ class Dreamview:
             if (
                 response_json.get("action") == "response"
                 and response_json.get("data", {}).get("requestId")
-                == f"CheckRoutingPoint!{_request_id}"
+                == f"CheckRoutingPoint!{request_id}"
             ):
                 # data.info.data.isLegao == 1
                 is_legal = bool(
                     cast(
                         dict[str, Any],
-                        response_json.get("data", {}).get("info", {}).get("data", {}),
+                        response_json.get("data", {})
+                        .get("info", {})
+                        .get("data", {}),
                     ).get("isLegal", 0)
                     == 1
                 )
                 if is_legal:
-                    logger.info(f"{self.ctn.ip_address}: Routing point is legal")
+                    logger.info(
+                        f"{self.ctn.ip_address}: Routing point is legal"
+                    )
                 if not is_legal:
                     message = (
-                        response_json.get("data", {}).get("info", {}).get("message", "")
+                        response_json.get("data", {})
+                        .get("info", {})
+                        .get("message", "")
                     )
                     logger.warning(
                         f"{self.ctn.ip_address}: Routing point is illegal. "
@@ -313,7 +329,7 @@ class Dreamview:
         Returns:
             True if Dreamview accepts the start point.
         """
-        _request_id = nanoid.generate()
+        request_id = nanoid.generate()
         payload = {
             "data": {
                 "name": "",
@@ -328,7 +344,7 @@ class Dreamview:
                 "target": "dreamview",
                 "sourceType": "module",
                 "targetType": "dreamview",
-                "requestId": f"SetStartPoint!{_request_id}",
+                "requestId": f"SetStartPoint!{request_id}",
             },
             "type": "SetStartPoint",
             "action": "request",
@@ -342,7 +358,8 @@ class Dreamview:
             return False
         # send the request
         logger.info(
-            f"{self.ctn.ip_address}: Setting start point to ({x}, {y}, {heading})"
+            f"{self.ctn.ip_address}: Setting start point to "
+            f"({x}, {y}, {heading})"
         )
         self._socket().send(json.dumps(payload))
         # wait for the response
@@ -354,12 +371,17 @@ class Dreamview:
             if (
                 response_json.get("action") == "response"
                 and response_json.get("data", {}).get("requestId")
-                == f"SetStartPoint!{_request_id}"
+                == f"SetStartPoint!{request_id}"
             ):
                 # check response.data.code.info == -1 for failure
-                if response_json.get("data", {}).get("info", {}).get("code", 0) == -1:
+                if (
+                    response_json.get("data", {}).get("info", {}).get("code", 0)
+                    == -1
+                ):
                     message = (
-                        response_json.get("data", {}).get("info", {}).get("message", "")
+                        response_json.get("data", {})
+                        .get("info", {})
+                        .get("message", "")
                     )
                     logger.error(
                         f"{self.ctn.ip_address}: Failed to set start point. "
@@ -367,7 +389,9 @@ class Dreamview:
                     )
                     return False
                 else:
-                    logger.info(f"{self.ctn.ip_address}: Set start point successfully")
+                    logger.info(
+                        f"{self.ctn.ip_address}: Set start point successfully"
+                    )
                     return True
 
     def start_routing(self, waypoints: list[dict[str, float]]) -> bool:
@@ -393,15 +417,18 @@ class Dreamview:
             if not self.check_routing_point(
                 waypoint["x"], waypoint["y"], waypoint["heading"]
             ):
+                waypoint_x = waypoint["x"]
+                waypoint_y = waypoint["y"]
+                waypoint_heading = waypoint["heading"]
                 waypoint_text = (
-                    f"({waypoint['x']}, {waypoint['y']}, {waypoint['heading']})"
+                    f"({waypoint_x}, {waypoint_y}, {waypoint_heading})"
                 )
                 logger.error(
                     f"{self.ctn.ip_address}: Failed to start routing due to "
                     f"illegal waypoint {waypoint_text}"
                 )
                 return False
-        _request_id = nanoid.generate()
+        request_id = nanoid.generate()
         payload = {
             "data": {
                 "name": "",
@@ -420,13 +447,14 @@ class Dreamview:
                 "target": "dreamview",
                 "sourceType": "module",
                 "targetType": "dreamview",
-                "requestId": f"SendRoutingRequest!{_request_id}",
+                "requestId": f"SendRoutingRequest!{request_id}",
             },
             "type": "SendRoutingRequest",
             "action": "request",
         }
         logger.info(
-            f"{self.ctn.ip_address}: Starting routing with {len(waypoints)} waypoints"
+            f"{self.ctn.ip_address}: Starting routing with "
+            f"{len(waypoints)} waypoints"
         )
         self._socket().send(json.dumps(payload))
         # wait for response
@@ -438,12 +466,17 @@ class Dreamview:
             if (
                 response_json.get("action") == "response"
                 and response_json.get("data", {}).get("requestId")
-                == f"SendRoutingRequest!{_request_id}"
+                == f"SendRoutingRequest!{request_id}"
             ):
                 # check response.data.code.info == -1 for failure
-                if response_json.get("data", {}).get("info", {}).get("code", 0) == -1:
+                if (
+                    response_json.get("data", {}).get("info", {}).get("code", 0)
+                    == -1
+                ):
                     message = (
-                        response_json.get("data", {}).get("info", {}).get("message", "")
+                        response_json.get("data", {})
+                        .get("info", {})
+                        .get("message", "")
                     )
                     logger.error(
                         f"{self.ctn.ip_address}: Failed to start routing. "
@@ -451,7 +484,9 @@ class Dreamview:
                     )
                     return False
                 else:
-                    logger.info(f"{self.ctn.ip_address}: Started routing successfully")
+                    logger.info(
+                        f"{self.ctn.ip_address}: Started routing successfully"
+                    )
                     return True
 
     def load_dynamic_models(self) -> None:

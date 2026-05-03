@@ -1,5 +1,9 @@
 """Predefined CyberRT topics for common Apollo messages."""
 
+# The topic names are public API constants that intentionally use Apollo-style
+# names such as `LocalizationTopic`.
+# pylint: disable=invalid-name
+
 from typing import cast
 
 from baidu_apollo_proto.v11.modules.common_msgs.chassis_msgs import (

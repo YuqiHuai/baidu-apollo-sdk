@@ -30,12 +30,12 @@ def to_bytes(s: str) -> bytes:
 class BridgeOp:
     """Operation byte constants for the cyber-bridge wire protocol."""
 
-    RegisterDesc = (1).to_bytes(1, byteorder="big")
-    AddReader = (2).to_bytes(1, byteorder="big")
+    REGISTER_DESC = (1).to_bytes(1, byteorder="big")
+    ADD_READER = (2).to_bytes(1, byteorder="big")
     """Register a subscriber"""
-    AddWriter = (3).to_bytes(1, byteorder="big")
+    ADD_WRITER = (3).to_bytes(1, byteorder="big")
     """Register a publisher"""
-    Publish = (4).to_bytes(1, byteorder="big")
+    PUBLISH = (4).to_bytes(1, byteorder="big")
     """Publish a message"""
 
 
@@ -63,7 +63,7 @@ class CyberBridge:
         self.conn = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.conn.connect((host, port))
         self.conn.setblocking(False)
-        self.subscribers = defaultdict(lambda: list())
+        self.subscribers = defaultdict(list)
         self.publishable_channel = set()
         self._registered_proto_descriptors: set[str] = set()
         self.spinning = False
@@ -83,9 +83,9 @@ class CyberBridge:
         result = b""
         shifts = [0, 8, 16, 24]
         for s in shifts:
-            result += ((len(data) >> s).to_bytes(4, byteorder="big")[-1]).to_bytes(
-                1, byteorder="big"
-            )
+            result += (
+                (len(data) >> s).to_bytes(4, byteorder="big")[-1]
+            ).to_bytes(1, byteorder="big")
         result += data
         return result
 
@@ -136,7 +136,7 @@ class CyberBridge:
         if not descriptors:
             return
 
-        data = BridgeOp.RegisterDesc
+        data = BridgeOp.REGISTER_DESC
         data += len(descriptors).to_bytes(4, byteorder="little")
         for proto_descriptor in descriptors:
             data += self.__prepare_bytes(proto_descriptor.serialized_pb)
@@ -156,7 +156,7 @@ class CyberBridge:
         """
         topic_msg_type = topic.msg_type
 
-        data = BridgeOp.AddReader
+        data = BridgeOp.ADD_READER
         data += self.__prepare_bytes(to_bytes(topic.channel))
         data += self.__prepare_bytes(to_bytes(topic_msg_type))
 
@@ -177,7 +177,7 @@ class CyberBridge:
 
         topic_msg_type = topic.msg_type
 
-        data = BridgeOp.AddWriter
+        data = BridgeOp.ADD_WRITER
         data += self.__prepare_bytes(to_bytes(topic.channel))
         data += self.__prepare_bytes(to_bytes(topic_msg_type))
         self.__send(data)
@@ -190,7 +190,7 @@ class CyberBridge:
             data: Complete packet received from cyber-bridge.
         """
         op = data[0]
-        if op == int.from_bytes(BridgeOp.Publish, "big"):
+        if op == int.from_bytes(BridgeOp.PUBLISH, "big"):
             self.receive_publish(data)
         else:
             pass
@@ -241,8 +241,8 @@ class CyberBridge:
         Raises:
             AssertionError: If `data` is not exactly `bytes`.
         """
-        assert type(data) is bytes
-        msg = BridgeOp.Publish
+        assert isinstance(data, bytes)
+        msg = BridgeOp.PUBLISH
         msg += self.__prepare_bytes(to_bytes(topic.channel))
         msg += self.__prepare_bytes(data)
         self.__send(msg)
@@ -254,7 +254,7 @@ class CyberBridge:
                 return
 
             op = self._buffer[0]
-            logger.debug(f"Received op: {op}")
+            logger.debug("Received op: %s", op)
 
             # Need at least 1 + 4 bytes for topic length
             if len(self._buffer) < 5:
@@ -270,7 +270,7 @@ class CyberBridge:
                 return
 
             topic = self._buffer[offset : offset + topic_length]
-            logger.debug(f"Received topic: {topic.decode('ascii')}")
+            logger.debug("Received topic: %s", topic.decode("ascii"))
             offset += topic_length
 
             message_size = self.__get_32_le(self._buffer[offset : offset + 4])
@@ -304,10 +304,10 @@ class CyberBridge:
                 break
 
             except OSError as e:
-                logger.error(f"Socket error: {e}")
+                logger.error("Socket error: %s", e)
                 break
 
-            except Exception:
+            except Exception:  # pylint: disable=broad-exception-caught
                 logger.exception("Unexpected error in _spin loop")
                 break
 
