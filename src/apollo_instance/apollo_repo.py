@@ -1,12 +1,19 @@
 import subprocess
 from pathlib import Path
 
+from apollo_instance.config import (
+    get_apollo_branch,
+    get_apollo_commit_hash,
+    get_apollo_git_url,
+    get_apollo_root,
+)
+
 
 class ApolloRepo:
     def __init__(
         self,
         github_url: str,
-        target_dir: str,
+        target_dir: str | Path,
         branch: str = "",
         commit_hash: str = "",
     ):
@@ -14,6 +21,15 @@ class ApolloRepo:
         self.target_dir = Path(target_dir)
         self.branch = branch
         self.commit_hash = commit_hash
+
+    @classmethod
+    def from_config(cls) -> "ApolloRepo":
+        return cls(
+            get_apollo_git_url(),
+            get_apollo_root(),
+            branch=get_apollo_branch(),
+            commit_hash=get_apollo_commit_hash(),
+        )
 
     def clone(self, stream: bool = False) -> None:
         """Clone the repository if not already cloned.
