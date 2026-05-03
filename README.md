@@ -28,6 +28,12 @@ Run tests:
 uv run pytest
 ```
 
+Build documentation:
+
+```bash
+uv run sphinx-build -W -b html docs docs/_build/html
+```
+
 Run tests without integration cases:
 
 ```bash
