@@ -55,34 +55,40 @@ class Topics:
         "/apollo/canbus/chassis",
         "apollo.canbus.Chassis",
         decode_proto(Chassis),
+        chassis_pb2.DESCRIPTOR,
     )
 
     LocalizationTopic: Topic[Message] = Topic(
         "/apollo/localization/pose",
         "apollo.localization.LocalizationEstimate",
         decode_proto(LocalizationEstimate),
+        localization_pb2.DESCRIPTOR,
     )
 
     ObstaclesTopic: Topic[Message] = Topic(
         "/apollo/perception/obstacles",
         "apollo.perception.PerceptionObstacles",
         decode_proto(PerceptionObstacles),
+        perception_obstacle_pb2.DESCRIPTOR,
     )
 
     TrafficLightTopic: Topic[Message] = Topic(
         "/apollo/perception/traffic_light",
         "apollo.perception.TrafficLightDetection",
         decode_proto(TrafficLightDetection),
+        traffic_light_detection_pb2.DESCRIPTOR,
     )
 
     PlanningTopic: Topic[Message] = Topic(
         "/apollo/planning",
         "apollo.planning.ADCTrajectory",
         decode_proto(ADCTrajectory),
+        planning_pb2.DESCRIPTOR,
     )
 
     RoutingRequestTopic: Topic[Message] = Topic(
         "/apollo/routing_request",
         "apollo.routing.RoutingRequest",
         decode_proto(RoutingRequest),
+        routing_pb2.DESCRIPTOR,
     )

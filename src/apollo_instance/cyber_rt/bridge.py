@@ -6,6 +6,8 @@ from collections.abc import Callable
 from threading import Thread
 from typing import Any
 
+from google.protobuf.descriptor import FileDescriptor
+
 from .channel import Topic
 
 logger = logging.getLogger(__name__)
@@ -59,6 +61,7 @@ class CyberBridge:
         self.conn.setblocking(False)
         self.subscribers = defaultdict(lambda: list())
         self.publishable_channel = set()
+        self._registered_proto_descriptors: set[str] = set()
         self.spinning = False
         self._buffer = b""
         self.t = None
@@ -82,6 +85,41 @@ class CyberBridge:
         result += data
         return result
 
+    def __send(self, data: bytes) -> None:
+        offset = 0
+        while offset < len(data):
+            _, writable, _ = select.select([], [self.conn], [], 5.0)
+            if not writable:
+                raise TimeoutError("Timed out waiting for cyber bridge socket")
+            offset += self.conn.send(data[offset:])
+
+    def __collect_proto_descriptors(
+        self,
+        descriptor: FileDescriptor,
+        result: list[FileDescriptor],
+    ) -> None:
+        if descriptor.name in self._registered_proto_descriptors:
+            return
+
+        for dependency in descriptor.dependencies:
+            self.__collect_proto_descriptors(dependency, result)
+
+        self._registered_proto_descriptors.add(descriptor.name)
+        result.append(descriptor)
+
+    def register_proto_descriptor(self, descriptor: FileDescriptor) -> None:
+        descriptors: list[FileDescriptor] = []
+        self.__collect_proto_descriptors(descriptor, descriptors)
+        if not descriptors:
+            return
+
+        data = BridgeOp.RegisterDesc
+        data += len(descriptors).to_bytes(4, byteorder="little")
+        for proto_descriptor in descriptors:
+            data += self.__prepare_bytes(proto_descriptor.serialized_pb)
+
+        self.__send(data)
+
     def add_subscriber(
         self,
         topic: Topic[Any],
@@ -99,7 +137,7 @@ class CyberBridge:
         data += self.__prepare_bytes(to_bytes(topic.channel))
         data += self.__prepare_bytes(to_bytes(topic_msg_type))
 
-        self.conn.send(data)
+        self.__send(data)
         self.subscribers[topic.channel].append(cb)
 
     def add_publisher(self, topic: Topic[Any]) -> None:
@@ -111,12 +149,15 @@ class CyberBridge:
         if topic.channel in self.publishable_channel:
             return
 
+        if topic.proto_descriptor is not None:
+            self.register_proto_descriptor(topic.proto_descriptor)
+
         topic_msg_type = topic.msg_type
 
         data = BridgeOp.AddWriter
         data += self.__prepare_bytes(to_bytes(topic.channel))
         data += self.__prepare_bytes(to_bytes(topic_msg_type))
-        self.conn.send(data)
+        self.__send(data)
         self.publishable_channel.add(topic.channel)
 
     def on_read(self, data: bytes) -> None:
@@ -180,7 +221,7 @@ class CyberBridge:
         msg = BridgeOp.Publish
         msg += self.__prepare_bytes(to_bytes(topic.channel))
         msg += self.__prepare_bytes(data)
-        self.conn.send(msg)
+        self.__send(msg)
 
     def _process_buffer(self) -> None:
         while True:

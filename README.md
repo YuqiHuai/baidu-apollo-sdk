@@ -82,3 +82,13 @@ uv run python examples/subscribe_multiple_latest.py
 
 The multi-topic example uses `subscribe_latest()` for localization and chassis,
 then decodes each raw message with that topic's decoder.
+
+Publish traffic light detections:
+
+```bash
+uv run python examples/publish_traffic_light.py
+```
+
+The publish example builds a `TrafficLightDetection` protobuf message, serializes
+it with `SerializeToString()`, and publishes the bytes with
+`bridge_client.publish(topic=Topics.TrafficLightTopic, msg=raw)`.
