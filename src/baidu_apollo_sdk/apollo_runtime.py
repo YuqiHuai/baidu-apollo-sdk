@@ -1,3 +1,5 @@
+"""High-level runtime operations for an Apollo container."""
+
 import string
 from time import perf_counter, sleep
 
@@ -7,15 +9,26 @@ from baidu_apollo_sdk.apollo_container import ApolloContainer
 
 
 class ApolloRuntime:
+    """Runs Apollo build, startup, map, and recorder commands in a container.
+
+    Attributes:
+        container: Apollo container wrapper used to execute runtime commands.
+    """
+
     def __init__(self, container: ApolloContainer):
+        """Initialize the runtime wrapper.
+
+        Args:
+            container: Running or startable Apollo container.
+        """
         self.container = container
 
     def build(self, stream: bool = False) -> None:
-        """Build the Apollo runtime environment by running the build command inside
-        the container.
+        """Build Apollo inside the container.
 
         Args:
             stream: Whether to stream the output of the build command. Default is False.
+
         Raises:
             RuntimeError: If the container is not running before build.
         """
@@ -28,9 +41,7 @@ class ApolloRuntime:
             raise RuntimeError("Build failed. Console output:\n" + console_out)
 
     def bootstrap(self, stream: bool = False) -> None:
-        """
-        Bootstrap the Apollo runtime environment by running the bootstrap script
-        inside the container.
+        """Start Apollo's standard bootstrap services in the container.
 
         Args:
             stream: Whether to stream the output of the bootstrap command.
@@ -41,19 +52,17 @@ class ApolloRuntime:
         )
 
     def start_dreamview(self, stream: bool = False) -> None:
-        """
-        Start the Dreamview module by running the corresponding script inside
-        the container.
+        """Start Dreamview in the container.
+
+        Args:
+            stream: Whether to stream command output.
         """
         self.container.exec_command(
             "bash scripts/bootstrap.sh start_dreamview", stream=stream
         )
 
     def start_bridge(self) -> None:
-        """
-        Start the Bridge module by running the corresponding script inside
-        the container.
-        """
+        """Start cyber-bridge in detached mode inside the container."""
         self.container.exec_command("bash scripts/bridge.sh", detach=True)
 
     def ensure_container(self, restart: bool = False) -> None:

@@ -1,3 +1,5 @@
+"""Utilities for managing the local Apollo source checkout."""
+
 import subprocess
 from pathlib import Path
 
@@ -10,6 +12,15 @@ from baidu_apollo_sdk.config import (
 
 
 class ApolloRepo:
+    """Represents a configured Apollo Git repository checkout.
+
+    Attributes:
+        github_url: Git remote URL to clone from.
+        target_dir: Local directory where the Apollo repository lives.
+        branch: Optional branch to checkout after cloning.
+        commit_hash: Optional commit hash to checkout after cloning.
+    """
+
     def __init__(
         self,
         github_url: str,
@@ -17,6 +28,14 @@ class ApolloRepo:
         branch: str = "",
         commit_hash: str = "",
     ):
+        """Initialize repository metadata.
+
+        Args:
+            github_url: Git remote URL to clone from.
+            target_dir: Local checkout directory.
+            branch: Optional branch to checkout.
+            commit_hash: Optional commit hash to checkout.
+        """
         self.github_url = github_url
         self.target_dir = Path(target_dir)
         self.branch = branch
@@ -24,6 +43,11 @@ class ApolloRepo:
 
     @classmethod
     def from_config(cls) -> "ApolloRepo":
+        """Create a repository descriptor from environment configuration.
+
+        Returns:
+            Repository descriptor populated from `baidu_apollo_sdk.config`.
+        """
         return cls(
             get_apollo_git_url(),
             get_apollo_root(),
@@ -63,7 +87,12 @@ class ApolloRepo:
         self.checkout()
 
     def checkout(self) -> None:
-        """Checkout the desired branch or commit."""
+        """Checkout the configured branch or commit.
+
+        Raises:
+            RuntimeError: If the repository is not cloned.
+            subprocess.CalledProcessError: If the Git checkout command fails.
+        """
 
         if not self.is_cloned():
             raise RuntimeError("Repository not cloned")
@@ -86,7 +115,12 @@ class ApolloRepo:
         )
 
     def pull(self) -> None:
-        """Pull latest changes."""
+        """Pull the latest changes into the cloned repository.
+
+        Raises:
+            RuntimeError: If the repository is not cloned.
+            subprocess.CalledProcessError: If the Git pull command fails.
+        """
         if not self.is_cloned():
             raise RuntimeError("Repository not cloned")
 
@@ -98,8 +132,17 @@ class ApolloRepo:
         )
 
     def is_cloned(self) -> bool:
-        """Check if repo exists and is a git repo."""
+        """Check whether the target directory contains a Git checkout.
+
+        Returns:
+            True when the target directory has a `.git` directory.
+        """
         return (self.target_dir / ".git").exists()
 
     def get_path(self) -> Path:
+        """Return the local Apollo repository path.
+
+        Returns:
+            The configured target directory.
+        """
         return self.target_dir

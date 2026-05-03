@@ -1,3 +1,5 @@
+"""High-level client API for publishing and subscribing through cyber-bridge."""
+
 import queue
 import threading
 from collections import defaultdict
@@ -9,19 +11,39 @@ from .channel import Topic
 
 
 class LatestValue:
-    """Thread-safe container storing the most recent value."""
+    """Thread-safe container storing the most recent value.
+
+    The container is used by `CyberClient.subscribe_latest()` to expose the most
+    recent raw message bytes for a topic without requiring callers to consume a
+    blocking iterator.
+    """
 
     def __init__(self) -> None:
+        """Initialize an empty latest-value container."""
         self._value: bytes | None = None
         self._lock = threading.Lock()
         self._event = threading.Event()
 
     def set(self, v: bytes) -> None:
+        """Store a new latest value and wake blocked readers.
+
+        Args:
+            v: Raw message bytes received from cyber-bridge.
+        """
         with self._lock:
             self._value = v
             self._event.set()
 
     def get(self, block: bool = False) -> bytes | None:
+        """Return the latest stored value.
+
+        Args:
+            block: If True, wait until at least one value has been stored.
+
+        Returns:
+            Latest raw message bytes, or None if no value has arrived and
+            `block` is False.
+        """
         if block:
             self._event.wait()
         with self._lock:
@@ -43,6 +65,11 @@ class CyberClient:
     """
 
     def __init__(self, bridge: CyberBridge) -> None:
+        """Initialize a client around an active cyber-bridge connection.
+
+        Args:
+            bridge: Low-level bridge connection used for socket I/O.
+        """
         self.bridge = bridge
 
         # channel -> list of callbacks
@@ -59,9 +86,11 @@ class CyberClient:
     # -----------------------
 
     def start(self) -> None:
+        """Start the bridge receive loop in the background."""
         self.bridge.spin()
 
     def stop(self) -> None:
+        """Stop the bridge receive loop."""
         self.bridge.stop()
 
     # -----------------------
@@ -69,6 +98,12 @@ class CyberClient:
     # -----------------------
 
     def publish(self, topic: Topic[Any], msg: bytes) -> None:
+        """Publish serialized message bytes to a topic.
+
+        Args:
+            topic: Topic descriptor identifying the CyberRT channel and type.
+            msg: Serialized protobuf payload.
+        """
         ch = topic.channel
 
         if ch not in self._publishers:
@@ -90,6 +125,7 @@ class CyberClient:
             return
 
         def bridge_callback(msg: bytes) -> None:
+            """Fan out bridge messages to local subscribers."""
             for cb in self._callbacks[ch]:
                 cb(msg)
 
@@ -101,16 +137,22 @@ class CyberClient:
     # -----------------------
 
     def subscribe(self, topic: Topic[Any]) -> Iterator[bytes]:
-        """
-        Stream messages from a channel.
+        """Stream raw message bytes from a topic.
 
-        - Yields messages as they arrive
-        - Drops old messages if consumer is slow
+        The returned iterator blocks while waiting for messages. If the consumer
+        is slow, old queued messages are dropped before new ones are enqueued.
+
+        Args:
+            topic: Topic descriptor to subscribe to.
+
+        Yields:
+            Raw serialized message bytes as they arrive.
         """
 
         q: queue.Queue[bytes] = queue.Queue(maxsize=100)
 
         def callback(msg: bytes) -> None:
+            """Queue a streamed message, dropping the oldest item if needed."""
             if q.full():
                 try:
                     q.get_nowait()  # drop oldest
@@ -129,15 +171,22 @@ class CyberClient:
     # -----------------------
 
     def subscribe_latest(self, topic: Topic[Any]) -> LatestValue:
-        """
-        Subscribe to only the most recent value of a channel.
+        """Subscribe to the latest raw value from a topic.
 
-        Useful for high-frequency data (e.g. sensors).
+        This is useful for high-frequency topics where consumers only care about
+        the newest message.
+
+        Args:
+            topic: Topic descriptor to subscribe to.
+
+        Returns:
+            Latest-value container updated by bridge callbacks.
         """
 
         latest = LatestValue()
 
         def callback(msg: bytes) -> None:
+            """Store the newest message for latest-value subscribers."""
             latest.set(msg)
 
         self._ensure_subscription(topic)

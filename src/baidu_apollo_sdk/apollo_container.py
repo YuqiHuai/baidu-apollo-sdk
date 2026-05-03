@@ -1,3 +1,5 @@
+"""Docker container helpers for running Apollo development commands."""
+
 import os
 import shlex
 import subprocess
@@ -10,25 +12,37 @@ from loguru import logger
 
 
 class ApolloContainer:
+    """Represents an Apollo development Docker container.
+
+    Attributes:
+        name: Short SDK-level container name without the Apollo prefix.
+        apollo_path: Path to the Apollo source checkout on the host.
+        docker_client: Docker SDK client used for container operations.
+    """
+
     DEV_CONTAINER_PREFIX = "apollo_dev_"
 
     def __init__(self, name: str, apollo_path: str):
+        """Initialize a container wrapper.
+
+        Args:
+            name: Short container name. The runtime name is prefixed with
+                `apollo_dev_`.
+            apollo_path: Host path to the Apollo source checkout.
+        """
         self.name = name
         self.apollo_path = apollo_path
         self.docker_client = docker.from_env()
 
     def start(self, verbose: bool = False) -> None:
-        """
-        Start the container.
+        """Start the Apollo development container.
 
         Args:
-            name: The name of the container to start.
-
-        Returns:
-            True if the container is started successfully, False otherwise.
+            verbose: If True, stream the startup script output.
 
         Raises:
-            RuntimeError: If the container fails to start.
+            RuntimeError: If the packaged startup script is missing, `USER` is
+                unset, or the container does not start successfully.
         """
         logger.info(f"{self.name}: Starting container")
         script_path = files("baidu_apollo_sdk.scripts") / "dev_start.sh"
@@ -106,6 +120,8 @@ class ApolloContainer:
             command: The command to execute.
             detach: Whether to run the command in detached mode. Default is False.
             stream: Whether to stream the output of the command. Default is False.
+            use_apollo_env: Whether to source Apollo's base environment before
+                running the command.
 
         Returns:
             The output of the command if detach is False, otherwise an empty string.

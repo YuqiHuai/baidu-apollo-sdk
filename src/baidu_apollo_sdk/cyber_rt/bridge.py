@@ -1,3 +1,5 @@
+"""Low-level socket protocol client for Apollo cyber-bridge."""
+
 import logging
 import select
 import socket
@@ -14,20 +16,19 @@ logger = logging.getLogger(__name__)
 
 
 def to_bytes(s: str) -> bytes:
-    """
-    Converts string to bytes using ascii
+    """Convert a string to ASCII bytes.
 
-    :param str s: string to be converted
-    :returns: bytes in ascii
-    :rtype: bytes
+    Args:
+        s: String to encode.
+
+    Returns:
+        ASCII-encoded bytes.
     """
     return bytes(s, "ascii")
 
 
 class BridgeOp:
-    """
-    Class representing cyber bridge operations.
-    """
+    """Operation byte constants for the cyber-bridge wire protocol."""
 
     RegisterDesc = (1).to_bytes(1, byteorder="big")
     AddReader = (2).to_bytes(1, byteorder="big")
@@ -39,11 +40,11 @@ class BridgeOp:
 
 
 class CyberBridge:
-    """
-    Class to represent CyberBridge
+    """Low-level cyber-bridge socket connection.
 
-    :param str host: IP address of cyber bridge running inside docker
-    :param int port: port of the cyber bridge
+    Args:
+        host: IP address or hostname for cyber-bridge.
+        port: TCP port for cyber-bridge.
     """
 
     conn: socket.socket
@@ -53,8 +54,11 @@ class CyberBridge:
     t: Thread | None
 
     def __init__(self, host: str, port: int = 9090) -> None:
-        """
-        Constructor
+        """Connect to a cyber-bridge TCP endpoint.
+
+        Args:
+            host: IP address or hostname for cyber-bridge.
+            port: TCP port for cyber-bridge.
         """
         self.conn = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.conn.connect((host, port))
@@ -68,13 +72,13 @@ class CyberBridge:
 
     @staticmethod
     def __prepare_bytes(data: bytes) -> bytes:
-        """
-        Transforms data into [length][data]
+        """Prefix a byte payload with its 32-bit little-endian length.
 
-        :param bytes data: data to be sent
+        Args:
+            data: Payload bytes.
 
-        :returns: prepared bytes ready to be sent to bridge
-        :rtype: bytes
+        Returns:
+            Length-prefixed payload bytes.
         """
         result = b""
         shifts = [0, 8, 16, 24]
@@ -86,6 +90,14 @@ class CyberBridge:
         return result
 
     def __send(self, data: bytes) -> None:
+        """Send all bytes over the non-blocking bridge socket.
+
+        Args:
+            data: Complete wire-protocol packet to send.
+
+        Raises:
+            TimeoutError: If the socket does not become writable.
+        """
         offset = 0
         while offset < len(data):
             _, writable, _ = select.select([], [self.conn], [], 5.0)
@@ -98,6 +110,12 @@ class CyberBridge:
         descriptor: FileDescriptor,
         result: list[FileDescriptor],
     ) -> None:
+        """Collect unregistered protobuf descriptors in dependency order.
+
+        Args:
+            descriptor: File descriptor to register.
+            result: Mutable list populated with descriptors to send.
+        """
         if descriptor.name in self._registered_proto_descriptors:
             return
 
@@ -108,6 +126,11 @@ class CyberBridge:
         result.append(descriptor)
 
     def register_proto_descriptor(self, descriptor: FileDescriptor) -> None:
+        """Register protobuf file descriptors with cyber-bridge.
+
+        Args:
+            descriptor: Protobuf file descriptor for a published message type.
+        """
         descriptors: list[FileDescriptor] = []
         self.__collect_proto_descriptors(descriptor, descriptors)
         if not descriptors:
@@ -125,11 +148,11 @@ class CyberBridge:
         topic: Topic[Any],
         cb: Callable[[bytes], None],
     ) -> None:
-        """
-        Adds a subscriber to the bridge
+        """Register a subscriber callback with cyber-bridge.
 
-        :param Topic topic: the topic to subscribe from
-        :param Function cb: callback function that takes parsed data from bridge
+        Args:
+            topic: Topic descriptor to subscribe to.
+            cb: Callback invoked with raw message bytes.
         """
         topic_msg_type = topic.msg_type
 
@@ -141,10 +164,10 @@ class CyberBridge:
         self.subscribers[topic.channel].append(cb)
 
     def add_publisher(self, topic: Topic[Any]) -> None:
-        """
-        Adds a publisher to the bridge
+        """Register a publisher with cyber-bridge.
 
-        :param Topic topic: the topic to publish message to
+        Args:
+            topic: Topic descriptor to publish to.
         """
         if topic.channel in self.publishable_channel:
             return
@@ -161,10 +184,10 @@ class CyberBridge:
         self.publishable_channel.add(topic.channel)
 
     def on_read(self, data: bytes) -> None:
-        """
-        Function callback to notify bridge has published data
+        """Dispatch a complete inbound wire-protocol packet.
 
-        :param bytes data: data received from bridge
+        Args:
+            data: Complete packet received from cyber-bridge.
         """
         op = data[0]
         if op == int.from_bytes(BridgeOp.Publish, "big"):
@@ -173,13 +196,13 @@ class CyberBridge:
             pass
 
     def __get_32_le(self, b: bytes) -> int:
-        """
-        Converts 32 bit le integer to int
+        """Convert 4 little-endian bytes to an integer.
 
-        :param bytes b: bytes representing a 32 bit integer
+        Args:
+            b: Four bytes representing a 32-bit little-endian integer.
 
-        :return: converted integer
-        :rtype: int
+        Returns:
+            Converted integer.
         """
         assert len(b) == 4, f"Expecting 4 bytes, got {len(b)}"
         b0 = b[0]
@@ -189,10 +212,10 @@ class CyberBridge:
         return b0 | b1 << 8 | b2 << 16 | b3 << 24
 
     def receive_publish(self, data: bytes) -> None:
-        """
-        Receives data published by bridge and calls subscribers
+        """Parse a publish packet and invoke local subscribers.
 
-        :param bytes data: data received from bridge
+        Args:
+            data: Complete publish packet received from cyber-bridge.
         """
         if not self.spinning:
             return
@@ -209,13 +232,14 @@ class CyberBridge:
             subscriber(msg)
 
     def publish(self, topic: Topic[Any], data: bytes) -> None:
-        """
-        Publish data to the bridge
+        """Publish raw message bytes through cyber-bridge.
 
-        :param Topic topic: topic to publish data to
-        :param bytes data: data to be published
+        Args:
+            topic: Topic descriptor to publish to.
+            data: Serialized protobuf payload.
 
-        :note: You should register a publisher first before publishing any data
+        Raises:
+            AssertionError: If `data` is not exactly `bytes`.
         """
         assert type(data) is bytes
         msg = BridgeOp.Publish
@@ -224,6 +248,7 @@ class CyberBridge:
         self.__send(msg)
 
     def _process_buffer(self) -> None:
+        """Process complete packets accumulated in the receive buffer."""
         while True:
             if len(self._buffer) < 1:
                 return
@@ -263,6 +288,7 @@ class CyberBridge:
             self.on_read(full_packet)
 
     def _spin(self) -> None:
+        """Read socket data until the bridge is stopped or the socket fails."""
         while self.spinning:
             try:
                 ready, _, _ = select.select([self.conn], [], [], 0.1)
@@ -288,9 +314,7 @@ class CyberBridge:
         self.spinning = False
 
     def spin(self) -> None:
-        """
-        Starts to spin the cyber bridge client
-        """
+        """Start the socket receive loop in a background thread."""
         if self.spinning:
             return
         self.spinning = True
@@ -298,9 +322,7 @@ class CyberBridge:
         self.t.start()
 
     def stop(self) -> None:
-        """
-        Stops the cyber bridge client
-        """
+        """Stop the socket receive loop and wait for its thread to exit."""
         self.spinning = False
         if self.t is not None:
             self.t.join()

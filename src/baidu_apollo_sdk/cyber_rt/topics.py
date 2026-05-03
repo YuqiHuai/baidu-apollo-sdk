@@ -1,4 +1,4 @@
-# topics.py
+"""Predefined CyberRT topics for common Apollo messages."""
 
 from typing import cast
 
@@ -51,6 +51,8 @@ RoutingRequest: type[Message] = cast(type[Message], routing_pb2.RoutingRequest)
 
 
 class Topics:
+    """Namespace containing common Apollo CyberRT topic descriptors."""
+
     ChassisTopic: Topic[Message] = Topic(
         "/apollo/canbus/chassis",
         "apollo.canbus.Chassis",
