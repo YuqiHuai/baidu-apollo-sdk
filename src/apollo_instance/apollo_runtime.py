@@ -22,7 +22,10 @@ class ApolloRuntime:
         if not self.container.is_running():
             raise RuntimeError("Container must be running before build")
 
-        self.container.exec_command("bash apollo.sh build", stream=stream)
+        console_out = self.container.exec_command("bash apollo.sh build", stream=stream)
+        # check if "Done building apollo. Enjoy!" is in console_out
+        if "Done building apollo. Enjoy!" not in console_out:
+            raise RuntimeError("Build failed. Console output:\n" + console_out)
 
     def bootstrap(self, stream: bool = False) -> None:
         """
@@ -207,10 +210,10 @@ class ApolloRuntime:
         )
 
         routing_map_created = self.container.check_file_exists(
-            "/apollo/modules/map/data/{map_name}/routing_map.bin"
+            f"/apollo/modules/map/data/{map_name}/routing_map.bin"
         )
         sim_map_created = self.container.check_file_exists(
-            "/apollo/modules/map/data/{map_name}/sim_map.bin"
+            f"/apollo/modules/map/data/{map_name}/sim_map.bin"
         )
 
         if not routing_map_created:
