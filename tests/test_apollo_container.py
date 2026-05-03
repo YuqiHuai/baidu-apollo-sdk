@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import os
 import subprocess
 import uuid
 from dataclasses import dataclass, field
@@ -11,7 +10,6 @@ import docker
 import pytest
 
 from apollo_instance.apollo_container import ApolloContainer
-from apollo_instance.apollo_repo import ApolloRepo
 
 
 @dataclass
@@ -429,62 +427,44 @@ def test_start_raises_when_container_does_not_start(
         container.start()
 
 
-def running_apollo_container() -> ApolloContainer:
-    try:
-        repo = ApolloRepo.from_config()
-    except RuntimeError as exc:
-        pytest.skip(str(exc))
-
-    container_name = os.environ.get("APOLLO_TEST_CONTAINER_NAME", "yuqi")
-    try:
-        container = ApolloContainer(container_name, str(repo.get_path()))
-    except docker.errors.DockerException as exc:
-        pytest.skip(f"Docker is not available: {exc}")
-
-    try:
-        if not container.is_running():
-            pytest.skip(
-                f"Apollo container '{container.container_name}' is not running"
-            )
-    except docker.errors.DockerException as exc:
-        pytest.skip(f"Docker is not available: {exc}")
-
-    return container
+@pytest.mark.integration
+def test_container_reports_running_status_for_available_container(
+    apollo_test_container: ApolloContainer,
+) -> None:
+    assert apollo_test_container.container_name.startswith(
+        ApolloContainer.DEV_CONTAINER_PREFIX
+    )
+    assert apollo_test_container.container_name != "apollo_dev_yuqi"
+    assert apollo_test_container.is_running() is True
+    assert apollo_test_container.ip_address
 
 
 @pytest.mark.integration
-def test_container_reports_running_status_for_available_container() -> None:
-    container = running_apollo_container()
-
-    assert container.container_name.startswith(ApolloContainer.DEV_CONTAINER_PREFIX)
-    assert container.is_running() is True
-    assert container.ip_address
-
-
-@pytest.mark.integration
-def test_container_executes_command_in_available_container() -> None:
-    container = running_apollo_container()
-
-    output = container.exec_command("pwd", use_apollo_env=False)
+def test_container_executes_command_in_available_container(
+    apollo_test_container: ApolloContainer,
+) -> None:
+    output = apollo_test_container.exec_command("pwd", use_apollo_env=False)
 
     assert output.strip() == "/apollo"
 
 
 @pytest.mark.integration
-def test_container_checks_file_existence_in_available_container() -> None:
-    container = running_apollo_container()
-
-    assert container.check_file_exists("/apollo/scripts/apollo_base.sh") is True
-    assert container.check_file_exists(
+def test_container_checks_file_existence_in_available_container(
+    apollo_test_container: ApolloContainer,
+) -> None:
+    assert apollo_test_container.check_file_exists(
+        "/apollo/scripts/apollo_base.sh"
+    ) is True
+    assert apollo_test_container.check_file_exists(
         "/apollo/this_file_should_not_exist_in_tests"
     ) is False
 
 
 @pytest.mark.integration
 def test_container_copies_file_to_and_from_available_container(
+    apollo_test_container: ApolloContainer,
     tmp_path: Path,
 ) -> None:
-    container = running_apollo_container()
     token = uuid.uuid4().hex
     local_source = tmp_path / "source.txt"
     local_destination = tmp_path / "destination.txt"
@@ -492,13 +472,16 @@ def test_container_copies_file_to_and_from_available_container(
     local_source.write_text(f"container-copy-{token}", encoding="utf-8")
 
     try:
-        container.copy_file_to_container(str(local_source), container_path)
-        assert container.check_file_exists(container_path) is True
+        apollo_test_container.copy_file_to_container(str(local_source), container_path)
+        assert apollo_test_container.check_file_exists(container_path) is True
 
-        container.copy_file_from_container(container_path, str(local_destination))
+        apollo_test_container.copy_file_from_container(
+            container_path,
+            str(local_destination),
+        )
 
         assert local_destination.read_text(encoding="utf-8") == (
             f"container-copy-{token}"
         )
     finally:
-        container.remove_file(container_path)
+        apollo_test_container.remove_file(container_path)

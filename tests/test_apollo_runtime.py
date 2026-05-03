@@ -1,14 +1,11 @@
 from __future__ import annotations
 
-import os
 from dataclasses import dataclass
 from typing import cast
 
-import docker
 import pytest
 
 from apollo_instance.apollo_container import ApolloContainer
-from apollo_instance.apollo_repo import ApolloRepo
 from apollo_instance.apollo_runtime import ApolloRuntime
 
 
@@ -216,32 +213,11 @@ def test_set_hd_map_rejects_unknown_map() -> None:
         runtime_for(container).set_hd_map("unknown_map")
 
 
-def running_apollo_runtime() -> ApolloRuntime:
-    try:
-        repo = ApolloRepo.from_config()
-    except RuntimeError as exc:
-        pytest.skip(str(exc))
-
-    container_name = os.environ.get("APOLLO_TEST_CONTAINER_NAME", "yuqi")
-    try:
-        container = ApolloContainer(container_name, str(repo.get_path()))
-    except docker.errors.DockerException as exc:
-        pytest.skip(f"Docker is not available: {exc}")
-
-    try:
-        if not container.is_running():
-            pytest.skip(
-                f"Apollo container '{container.container_name}' is not running"
-            )
-    except docker.errors.DockerException as exc:
-        pytest.skip(f"Docker is not available: {exc}")
-
-    return ApolloRuntime(container)
-
-
 @pytest.mark.integration
-def test_runtime_executes_command_in_available_container() -> None:
-    runtime = running_apollo_runtime()
+def test_runtime_executes_command_in_available_container(
+    apollo_test_container: ApolloContainer,
+) -> None:
+    runtime = ApolloRuntime(apollo_test_container)
 
     output = runtime.container.exec_command("pwd", use_apollo_env=False)
 
@@ -249,8 +225,10 @@ def test_runtime_executes_command_in_available_container() -> None:
 
 
 @pytest.mark.integration
-def test_runtime_lists_hd_maps_in_available_container() -> None:
-    runtime = running_apollo_runtime()
+def test_runtime_lists_hd_maps_in_available_container(
+    apollo_test_container: ApolloContainer,
+) -> None:
+    runtime = ApolloRuntime(apollo_test_container)
 
     maps = runtime.list_hd_maps()
 
@@ -259,8 +237,10 @@ def test_runtime_lists_hd_maps_in_available_container() -> None:
 
 
 @pytest.mark.integration
-def test_runtime_lists_cyber_nodes_in_available_container() -> None:
-    runtime = running_apollo_runtime()
+def test_runtime_lists_cyber_nodes_in_available_container(
+    apollo_test_container: ApolloContainer,
+) -> None:
+    runtime = ApolloRuntime(apollo_test_container)
 
     nodes = runtime.list_cyber_nodes()
 

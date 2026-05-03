@@ -39,14 +39,16 @@ Run only integration cases:
 uv run pytest -m integration
 ```
 
-Integration tests require Docker, a valid `.env`, and an already-running Apollo
-development container. By default, tests look for the Apollo container named
-`apollo_dev_yuqi`, because the test container name defaults to `yuqi`. Override
-the container suffix with `APOLLO_TEST_CONTAINER_NAME`:
+Integration tests require Docker and a valid `.env`. They create a dedicated
+Apollo development container for the test session and remove any stale container
+with the same name before starting. By default, tests use
+`apollo_dev_apollo_instance_test`, then stop and remove it after the integration
+tests finish. Override the container suffix with `APOLLO_TEST_CONTAINER_NAME`:
 
 ```bash
 APOLLO_TEST_CONTAINER_NAME=your_name uv run pytest -m integration
 ```
 
-If Docker, config, or the container is unavailable, integration tests are skipped
-instead of failing.
+Do not use `APOLLO_TEST_CONTAINER_NAME=yuqi`; the tests reject that name to avoid
+touching a personal development container. If Docker or config is unavailable,
+integration tests are skipped instead of failing.
