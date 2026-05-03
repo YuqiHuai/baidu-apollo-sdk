@@ -1,27 +1,35 @@
+import time
 from apollo_instance.apollo_container import ApolloContainer
 from apollo_instance.apollo_repo import ApolloRepo
 from apollo_instance.apollo_runtime import ApolloRuntime
-
+from apollo_instance.cyber_rt.client import CyberClient
+from apollo_instance.cyber_rt.bridge import CyberBridge
+from apollo_instance.cyber_rt.topics import Topics
+from apollo_instance.dreamview import Dreamview, DreamviewModes, DreamviewOperations, DreamviewVehicles
 repo = ApolloRepo.from_config()
 
 repo.clone(True)
 
 ctn = ApolloContainer("yuqi", repo.get_path())
 run_time = ApolloRuntime(ctn)
-run_time.ensure_container(False)
+# run_time.ensure_container(False)
 
-run_time.build(True)
+cyber_bridge = CyberBridge(ctn.ip_address)
 
-# maps = run_time.list_hd_maps()
-# print(maps)
+bridge_client = CyberClient(cyber_bridge)
 
-# if 'carla_town01' in maps:
-#     ctn.remove_directory("/apollo/modules/map/data/carla_town01")
-    
-# run_time.install_hd_map(
-#     "/home/yuqi/ResearchWorkspace/ICSE_2027/apollo-instance/"
-#     "data/maps/apollo/carla_town01/base_map.txt",
-#     "carla_town01",
-# )
 
-# run_time.set_hd_map("carla_town01")
+current_time = time.perf_counter()
+latest_loc = bridge_client.subscribe_latest(channel=Topics.LocalizationTopic)
+bridge_client.start()
+print('Subscribed to localization topic, waiting for messages...')
+while True:
+    if time.perf_counter() - current_time > 5:
+        print('Exiting')
+        break
+    raw = latest_loc.get(block=False)
+    if raw is not None:
+        loc = Topics.LocalizationTopic.decoder(raw)
+        print(f"Received localization message: position=({loc.pose.position.x}, {loc.pose.position.y}, {loc.pose.position.z}), timestamp={loc.header.timestamp_sec} ")
+        
+bridge_client.stop()

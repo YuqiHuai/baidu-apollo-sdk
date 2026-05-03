@@ -38,11 +38,7 @@ run_time.bootstrap()
 def run_scenario(ctn: ApolloContainer):
     dw = Dreamview(ctn)
     dw.connect()
-    dw.set_mode(DreamviewModes.PNC)
-    dw.set_operation(DreamviewOperations.SIM_CONTROL)
-    dw.load_dynamic_models()
-    dw.change_dynamic_model()
-    _ = dw.set_vehicle(DreamviewVehicles.MKZ_EXAMPLE)
+    dw.set_up_for_sim_control()
 
     run_time = ApolloRuntime(ctn)
     run_time.wait_for_node("sim_perfect_control", 0.5)

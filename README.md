@@ -52,3 +52,33 @@ APOLLO_TEST_CONTAINER_NAME=your_name uv run pytest -m integration
 Do not use `APOLLO_TEST_CONTAINER_NAME=yuqi`; the tests reject that name to avoid
 touching a personal development container. If Docker or config is unavailable,
 integration tests are skipped instead of failing.
+
+## CyberRT examples
+
+Subscribe to the latest localization message and decode the raw CyberRT bytes
+with the topic decoder:
+
+```bash
+uv run python examples/subscribe_localization.py
+```
+
+The example stores the latest value with `subscribe_latest()` and decodes it via
+`Topics.LocalizationTopic.decoder(raw)`.
+
+Stream localization messages as they arrive with `subscribe()`:
+
+```bash
+uv run python examples/stream_localization.py
+```
+
+The streaming example iterates over raw message bytes and decodes each message
+with `Topics.LocalizationTopic.decoder(raw)`.
+
+Subscribe to the latest values from multiple topics in one loop:
+
+```bash
+uv run python examples/subscribe_multiple_latest.py
+```
+
+The multi-topic example uses `subscribe_latest()` for localization and chassis,
+then decodes each raw message with that topic's decoder.

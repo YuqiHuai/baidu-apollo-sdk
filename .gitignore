@@ -2,6 +2,7 @@
 tmp/
 data/
 .env
+.codex/
 
 # Created by https://www.toptal.com/developers/gitignore/api/python,linux,windows,macos,visualstudiocode
 # Edit at https://www.toptal.com/developers/gitignore?templates=python,linux,windows,macos,visualstudiocode

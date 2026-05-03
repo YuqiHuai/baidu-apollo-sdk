@@ -357,3 +357,10 @@ class Dreamview:
             "Simulation Perfect Control"
         )
         self._socket().send(json.dumps(payload))
+    
+    def set_up_for_sim_control(self) -> dict[str, Any]:
+        self.set_mode(DreamviewModes.PNC)
+        self.set_operation(DreamviewOperations.SIM_CONTROL)
+        self.load_dynamic_models()
+        self.change_dynamic_model()
+        return self.set_vehicle(DreamviewVehicles.MKZ_EXAMPLE)
