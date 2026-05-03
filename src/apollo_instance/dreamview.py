@@ -62,7 +62,7 @@ class Dreamview:
             raise RuntimeError("Dreamview WebSocket is not connected")
         return self.socket_client
 
-    def set_mode(self, mode: str) -> bool:
+    def set_mode(self, mode: str) -> None:
         assert mode in DreamviewModes.__dict__.values(), f"Unsupported mode: {mode}"
         payload = get_hmi_action_request_payload("CHANGE_MODE", mode, "noResponse")
         logger.info(f"{self.ctn.ip_address}: Switching Dreamview mode to {mode}")

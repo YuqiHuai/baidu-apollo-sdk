@@ -15,7 +15,7 @@ class ApolloRepo:
         self.branch = branch
         self.commit_hash = commit_hash
 
-    def clone(self, stream: bool = False):
+    def clone(self, stream: bool = False) -> None:
         """Clone the repository if not already cloned.
 
         Args:
@@ -46,7 +46,7 @@ class ApolloRepo:
 
         self.checkout()
 
-    def checkout(self):
+    def checkout(self) -> None:
         """Checkout the desired branch or commit."""
 
         if not self.is_cloned():
@@ -69,7 +69,7 @@ class ApolloRepo:
             capture_output=True,
         )
 
-    def pull(self):
+    def pull(self) -> None:
         """Pull latest changes."""
         if not self.is_cloned():
             raise RuntimeError("Repository not cloned")

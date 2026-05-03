@@ -16,7 +16,7 @@ class ApolloContainer:
         self.apollo_path = apollo_path
         self.docker_client = docker.from_env()
 
-    def start(self, verbose: bool = False) -> bool:
+    def start(self, verbose: bool = False) -> None:
         """
         Start the container.
 
@@ -31,16 +31,20 @@ class ApolloContainer:
         """
         logger.info(f"{self.name}: Starting container")
         script_path = files("apollo_instance.scripts") / "dev_start.sh"
-        if not script_path.exists():
+
+        if not script_path.is_file():
             raise RuntimeError(f"Script not found: {script_path}")
 
         apollo_docker_scripts_dir = Path(self.apollo_path, "docker", "scripts")
         cmd = f"bash {script_path} -y -l --name {self.name}"
+        current_user = os.environ.get("USER")
+        if not current_user:
+            raise RuntimeError("USER environment variable is not set")
         subprocess.run(
             cmd,
             env={
-                "CURR_DIR": apollo_docker_scripts_dir,
-                "USER": os.environ.get("USER"),
+                "CURR_DIR": str(apollo_docker_scripts_dir),
+                "USER": str(current_user),
             },
             shell=True,
             capture_output=not verbose,
@@ -89,7 +93,11 @@ class ApolloContainer:
         return ip_address
 
     def exec_command(
-        self, command: str, detach: bool = False, stream: bool = False
+        self,
+        command: str,
+        detach: bool = False,
+        stream: bool = False,
+        use_apollo_env: bool = True,
     ) -> str:
         """Execute a command in the container.
 
@@ -105,8 +113,14 @@ class ApolloContainer:
         container = self.docker_client.containers.get(self.container_name)
         user = os.environ.get("USER")
         assert user is not None, "USER environment variable is not set"
+
+        if use_apollo_env:
+            cmd = 'bash -c "source /apollo/scripts/apollo_base.sh; ' + command + '"'
+        else:
+            cmd = command
+
         exec_stream = container.exec_run(
-            'bash -c "source /apollo/scripts/apollo_base.sh; ' + command + '"',
+            cmd,
             user=user,
             workdir="/apollo",
             environment={
@@ -134,3 +148,83 @@ class ApolloContainer:
         """Reset the container by killing all processes except PID 1."""
         logger.info(f"{self.name}: Resetting container.")
         self.exec_command("bash -c \"kill -9 $(ps -eo pid= | awk '$1 != 1')\"")
+
+    def check_file_exists(self, file_path: str) -> bool:
+        """Check if a file exists in the container.
+
+        Args:
+            file_path: The path to the file to check.
+        Returns:
+            True if the file exists, False otherwise.
+        """
+        logger.info(f"{self.name}: Checking if file exists: {file_path}")
+        result = self.exec_command(
+            f"test -f {file_path} && echo 'exists' || echo 'not exists'"
+        )
+        return "exists" in result
+
+    def remove_file(self, file_path: str) -> None:
+        """Remove a file in the container.
+
+        Args:
+            file_path: The path to the file to remove.
+        """
+        logger.info(f"{self.name}: Removing file: {file_path}")
+        self.exec_command(f"rm -f {file_path}")
+
+    def remove_directory(self, dir_path: str) -> None:
+        """Remove a directory in the container.
+
+        Args:
+            dir_path: The path to the directory to remove.
+        """
+        logger.info(f"{self.name}: Removing directory: {dir_path}")
+        self.exec_command(f"rm -rf {dir_path}")
+
+    def copy_file_to_container(self, local_path: str, container_path: str) -> None:
+        """Copy a file from the local machine to the container.
+
+        Args:
+            local_path: The path to the file on the local machine.
+            container_path: The path to the file in the container.
+        """
+        logger.info(f"{self.name}: Copying file from {local_path} to {container_path}")
+        copy_status = subprocess.run(
+            [
+                "docker",
+                "cp",
+                local_path,
+                f"{self.container_name}:{container_path}",
+            ],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        if copy_status.returncode != 0:
+            raise RuntimeError(
+                f"Failed to copy file to container: {copy_status.stderr}"
+            )
+
+    def copy_file_from_container(self, container_path: str, local_path: str) -> None:
+        """Copy a file from the container to the local machine.
+
+        Args:
+            container_path: The path to the file in the container.
+            local_path: The path to the file on the local machine.
+        """
+        logger.info(f"{self.name}: Copying file from {container_path} to {local_path}")
+        copy_status = subprocess.run(
+            [
+                "docker",
+                "cp",
+                f"{self.container_name}:{container_path}",
+                local_path,
+            ],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        if copy_status.returncode != 0:
+            raise RuntimeError(
+                f"Failed to copy file from container: {copy_status.stderr}"
+            )

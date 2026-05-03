@@ -32,9 +32,10 @@ repo = ApolloRepo(
     branch="fix/dreamview_plus_traffic_light",
 )
 
-ctn = ApolloContainer("apollo_dev_yuqi", repo.get_path())
+ctn = ApolloContainer("yuqi", repo.get_path())
 run_time = ApolloRuntime(ctn)
 run_time.ensure_container(restart=True)
+run_time.set_hd_map("borregas_ave")
 run_time.bootstrap()
 
 
