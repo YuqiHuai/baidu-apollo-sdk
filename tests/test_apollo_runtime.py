@@ -5,8 +5,8 @@ from typing import cast
 
 import pytest
 
-from apollo_instance.apollo_container import ApolloContainer
-from apollo_instance.apollo_runtime import ApolloRuntime
+from baidu_apollo_sdk.apollo_container import ApolloContainer
+from baidu_apollo_sdk.apollo_runtime import ApolloRuntime
 
 
 @dataclass
@@ -111,8 +111,7 @@ def test_list_cyber_nodes_skips_summary_and_blank_lines() -> None:
 def test_list_hd_maps_returns_map_directory_names() -> None:
     container = FakeContainer()
     find_command = (
-        "find /apollo/modules/map/data -maxdepth 1"
-        " -mindepth 1 -type d -printf '%f\\n'"
+        "find /apollo/modules/map/data -maxdepth 1 -mindepth 1 -type d -printf '%f\\n'"
     )
     container.command_outputs[find_command] = "\nborregas_ave\nsunnyvale\n\n"
 
@@ -125,8 +124,7 @@ def test_list_hd_maps_returns_map_directory_names() -> None:
 def test_install_hd_map_rejects_duplicate_map_name() -> None:
     container = FakeContainer()
     container.command_outputs[
-        "find /apollo/modules/map/data -maxdepth 1"
-        " -mindepth 1 -type d -printf '%f\\n'"
+        "find /apollo/modules/map/data -maxdepth 1 -mindepth 1 -type d -printf '%f\\n'"
     ] = "borregas_ave\n"
 
     with pytest.raises(ValueError, match="already exists"):
@@ -175,7 +173,7 @@ def test_install_hd_map_generates_name_when_missing(
         f"{map_dir}/sim_map.bin",
     }
     monkeypatch.setattr(
-        "apollo_instance.apollo_runtime.nanoid.generate",
+        "baidu_apollo_sdk.apollo_runtime.nanoid.generate",
         lambda alphabet, size: map_name,
     )
 
@@ -192,15 +190,14 @@ def test_install_hd_map_raises_when_generated_files_are_missing() -> None:
 def test_set_hd_map_validates_map_and_writes_global_flag() -> None:
     container = FakeContainer()
     container.command_outputs[
-        "find /apollo/modules/map/data -maxdepth 1"
-        " -mindepth 1 -type d -printf '%f\\n'"
+        "find /apollo/modules/map/data -maxdepth 1 -mindepth 1 -type d -printf '%f\\n'"
     ] = "borregas_ave\n"
 
     runtime_for(container).set_hd_map("borregas_ave")
 
     assert container.commands[-1] == CommandCall(
         "bash -c \"echo '--map_dir=/apollo/modules/map/data/borregas_ave'"
-        " >> /apollo/modules/common/data/global_flagfile.txt\"",
+        ' >> /apollo/modules/common/data/global_flagfile.txt"',
         stream=True,
         use_apollo_env=False,
     )

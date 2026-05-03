@@ -31,7 +31,7 @@ class ApolloContainer:
             RuntimeError: If the container fails to start.
         """
         logger.info(f"{self.name}: Starting container")
-        script_path = files("apollo_instance.scripts") / "dev_start.sh"
+        script_path = files("baidu_apollo_sdk.scripts") / "dev_start.sh"
 
         if not script_path.is_file():
             raise RuntimeError(f"Script not found: {script_path}")

@@ -1,5 +1,5 @@
 [project]
-name = "apollo_instance"
+name = "baidu_apollo_sdk"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
@@ -14,7 +14,7 @@ dependencies = [
 ]
 
 [tool.setuptools.package-data]
-apollo_instance = ["scripts/*.sh"]
+baidu_apollo_sdk = ["scripts/*.sh"]
 
 [tool.setuptools.packages.find]
 where = ["src"]

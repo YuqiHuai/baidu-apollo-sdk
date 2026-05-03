@@ -1,5 +1,5 @@
-import apollo_instance
+import baidu_apollo_sdk
 
 
 def test_package_imports() -> None:
-    assert apollo_instance is not None
+    assert baidu_apollo_sdk is not None

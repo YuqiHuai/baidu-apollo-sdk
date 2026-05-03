@@ -2,9 +2,9 @@
 This script demonstrates ApolloRepo, ApolloContainer, and ApolloRuntime setup.
 """
 
-from apollo_instance.apollo_container import ApolloContainer
-from apollo_instance.apollo_repo import ApolloRepo
-from apollo_instance.apollo_runtime import ApolloRuntime
+from baidu_apollo_sdk.apollo_container import ApolloContainer
+from baidu_apollo_sdk.apollo_repo import ApolloRepo
+from baidu_apollo_sdk.apollo_runtime import ApolloRuntime
 
 repo = ApolloRepo.from_config()
 

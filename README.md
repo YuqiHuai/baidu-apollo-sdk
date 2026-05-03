@@ -1,4 +1,4 @@
-# apollo_instance
+# baidu_apollo_sdk
 
 ## Development
 
@@ -42,7 +42,7 @@ uv run pytest -m integration
 Integration tests require Docker and a valid `.env`. They create a dedicated
 Apollo development container for the test session and remove any stale container
 with the same name before starting. By default, tests use
-`apollo_dev_apollo_instance_test`, then stop and remove it after the integration
+`apollo_dev_baidu_apollo_sdk_test`, then stop and remove it after the integration
 tests finish. Override the container suffix with `APOLLO_TEST_CONTAINER_NAME`:
 
 ```bash

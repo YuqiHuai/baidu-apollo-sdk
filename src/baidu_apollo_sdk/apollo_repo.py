@@ -1,7 +1,7 @@
 import subprocess
 from pathlib import Path
 
-from apollo_instance.config import (
+from baidu_apollo_sdk.config import (
     get_apollo_branch,
     get_apollo_commit_hash,
     get_apollo_git_url,

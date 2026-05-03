@@ -4,17 +4,17 @@ from baidu_apollo_proto.v11.modules.common_msgs.perception_msgs import (
     traffic_light_detection_pb2,
 )
 
-from apollo_instance.apollo_container import ApolloContainer
-from apollo_instance.apollo_repo import ApolloRepo
-from apollo_instance.cyber_rt.bridge import CyberBridge
-from apollo_instance.cyber_rt.client import CyberClient
-from apollo_instance.cyber_rt.topics import Topics
+from baidu_apollo_sdk.apollo_container import ApolloContainer
+from baidu_apollo_sdk.apollo_repo import ApolloRepo
+from baidu_apollo_sdk.cyber_rt.bridge import CyberBridge
+from baidu_apollo_sdk.cyber_rt.client import CyberClient
+from baidu_apollo_sdk.cyber_rt.topics import Topics
 
 
 def build_traffic_light_detection(sequence_num: int) -> bytes:
     detection = traffic_light_detection_pb2.TrafficLightDetection()
     detection.header.timestamp_sec = time.time()
-    detection.header.module_name = "apollo_instance_example"
+    detection.header.module_name = "baidu_apollo_sdk_example"
     detection.header.sequence_num = sequence_num
     detection.contain_lights = True
     detection.camera_id = (

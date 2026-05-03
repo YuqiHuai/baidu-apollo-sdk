@@ -3,14 +3,12 @@ import time
 
 from loguru import logger
 
-from apollo_instance.apollo_container import ApolloContainer
-from apollo_instance.apollo_repo import ApolloRepo
-from apollo_instance.apollo_runtime import ApolloRuntime
-from apollo_instance.dreamview import (
+from baidu_apollo_sdk.apollo_container import ApolloContainer
+from baidu_apollo_sdk.apollo_repo import ApolloRepo
+from baidu_apollo_sdk.apollo_runtime import ApolloRuntime
+from baidu_apollo_sdk.dreamview import (
     Dreamview,
-    DreamviewModes,
     DreamviewOperations,
-    DreamviewVehicles,
 )
 
 logger.remove()

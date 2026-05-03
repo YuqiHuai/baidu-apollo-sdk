@@ -7,7 +7,7 @@ resolution-markers = [
 ]
 
 [[package]]
-name = "apollo-instance"
+name = "baidu-apollo-sdk"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [

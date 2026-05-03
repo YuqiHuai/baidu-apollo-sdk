@@ -9,7 +9,7 @@ from typing import Any
 import docker
 import pytest
 
-from apollo_instance.apollo_container import ApolloContainer
+from baidu_apollo_sdk.apollo_container import ApolloContainer
 
 
 @dataclass
@@ -92,7 +92,7 @@ def apollo_container(
 ) -> ApolloContainer:
     fake_client = FakeDockerClient(docker_container or FakeDockerContainer())
     monkeypatch.setattr(
-        "apollo_instance.apollo_container.docker.from_env",
+        "baidu_apollo_sdk.apollo_container.docker.from_env",
         lambda: fake_client,
     )
     return ApolloContainer("yuqi", "/apollo/root")
@@ -284,7 +284,7 @@ def test_copy_file_to_container_runs_docker_cp(
         return subprocess.CompletedProcess(cmd, 0, "", "")
 
     container = apollo_container(monkeypatch)
-    monkeypatch.setattr("apollo_instance.apollo_container.subprocess.run", fake_run)
+    monkeypatch.setattr("baidu_apollo_sdk.apollo_container.subprocess.run", fake_run)
 
     container.copy_file_to_container("/tmp/local.txt", "/apollo/remote.txt")
 
@@ -313,7 +313,7 @@ def test_copy_file_from_container_runs_docker_cp(
         return subprocess.CompletedProcess(cmd, 0, "", "")
 
     container = apollo_container(monkeypatch)
-    monkeypatch.setattr("apollo_instance.apollo_container.subprocess.run", fake_run)
+    monkeypatch.setattr("baidu_apollo_sdk.apollo_container.subprocess.run", fake_run)
 
     container.copy_file_from_container("/apollo/remote.txt", "/tmp/local.txt")
 
@@ -347,10 +347,10 @@ def test_start_runs_packaged_dev_start_script(
         return subprocess.CompletedProcess(cmd, 0, "", "")
 
     monkeypatch.setattr(
-        "apollo_instance.apollo_container.files",
+        "baidu_apollo_sdk.apollo_container.files",
         lambda package: tmp_path,
     )
-    monkeypatch.setattr("apollo_instance.apollo_container.subprocess.run", fake_run)
+    monkeypatch.setattr("baidu_apollo_sdk.apollo_container.subprocess.run", fake_run)
     monkeypatch.setenv("USER", "alice")
 
     container.start()
@@ -374,7 +374,7 @@ def test_start_raises_when_packaged_script_is_missing(
 ) -> None:
     container = apollo_container(monkeypatch)
     monkeypatch.setattr(
-        "apollo_instance.apollo_container.files",
+        "baidu_apollo_sdk.apollo_container.files",
         lambda package: tmp_path,
     )
 
@@ -390,7 +390,7 @@ def test_start_raises_when_user_is_missing(
     script_path.write_text("#!/usr/bin/env bash\n", encoding="utf-8")
     container = apollo_container(monkeypatch)
     monkeypatch.setattr(
-        "apollo_instance.apollo_container.files",
+        "baidu_apollo_sdk.apollo_container.files",
         lambda package: tmp_path,
     )
     monkeypatch.delenv("USER", raising=False)
@@ -417,10 +417,10 @@ def test_start_raises_when_container_does_not_start(
         return subprocess.CompletedProcess(cmd, 0, "", "")
 
     monkeypatch.setattr(
-        "apollo_instance.apollo_container.files",
+        "baidu_apollo_sdk.apollo_container.files",
         lambda package: tmp_path,
     )
-    monkeypatch.setattr("apollo_instance.apollo_container.subprocess.run", fake_run)
+    monkeypatch.setattr("baidu_apollo_sdk.apollo_container.subprocess.run", fake_run)
     monkeypatch.setenv("USER", "alice")
 
     with pytest.raises(RuntimeError, match="Failed to start container"):
@@ -452,12 +452,16 @@ def test_container_executes_command_in_available_container(
 def test_container_checks_file_existence_in_available_container(
     apollo_test_container: ApolloContainer,
 ) -> None:
-    assert apollo_test_container.check_file_exists(
-        "/apollo/scripts/apollo_base.sh"
-    ) is True
-    assert apollo_test_container.check_file_exists(
-        "/apollo/this_file_should_not_exist_in_tests"
-    ) is False
+    assert (
+        apollo_test_container.check_file_exists("/apollo/scripts/apollo_base.sh")
+        is True
+    )
+    assert (
+        apollo_test_container.check_file_exists(
+            "/apollo/this_file_should_not_exist_in_tests"
+        )
+        is False
+    )
 
 
 @pytest.mark.integration
@@ -468,7 +472,7 @@ def test_container_copies_file_to_and_from_available_container(
     token = uuid.uuid4().hex
     local_source = tmp_path / "source.txt"
     local_destination = tmp_path / "destination.txt"
-    container_path = f"/tmp/apollo_instance_container_test_{token}.txt"
+    container_path = f"/tmp/baidu_apollo_sdk_container_test_{token}.txt"
     local_source.write_text(f"container-copy-{token}", encoding="utf-8")
 
     try:

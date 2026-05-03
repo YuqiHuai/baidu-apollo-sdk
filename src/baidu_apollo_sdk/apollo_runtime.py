@@ -3,7 +3,7 @@ from time import perf_counter, sleep
 
 import nanoid
 
-from apollo_instance.apollo_container import ApolloContainer
+from baidu_apollo_sdk.apollo_container import ApolloContainer
 
 
 class ApolloRuntime:

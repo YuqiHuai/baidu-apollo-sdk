@@ -1,10 +1,10 @@
 import time
 
-from apollo_instance.apollo_container import ApolloContainer
-from apollo_instance.apollo_repo import ApolloRepo
-from apollo_instance.cyber_rt.bridge import CyberBridge
-from apollo_instance.cyber_rt.client import CyberClient
-from apollo_instance.cyber_rt.topics import Topics
+from baidu_apollo_sdk.apollo_container import ApolloContainer
+from baidu_apollo_sdk.apollo_repo import ApolloRepo
+from baidu_apollo_sdk.cyber_rt.bridge import CyberBridge
+from baidu_apollo_sdk.cyber_rt.client import CyberClient
+from baidu_apollo_sdk.cyber_rt.topics import Topics
 
 
 def main() -> None:

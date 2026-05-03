@@ -7,11 +7,11 @@ from typing import Any
 import docker
 import pytest
 
-from apollo_instance.apollo_container import ApolloContainer
-from apollo_instance.apollo_repo import ApolloRepo
+from baidu_apollo_sdk.apollo_container import ApolloContainer
+from baidu_apollo_sdk.apollo_repo import ApolloRepo
 
 APOLLO_TEST_CONTAINER_NAME_ENV = "APOLLO_TEST_CONTAINER_NAME"
-DEFAULT_APOLLO_TEST_CONTAINER_NAME = "apollo_instance_test"
+DEFAULT_APOLLO_TEST_CONTAINER_NAME = "baidu_apollo_sdk_test"
 
 
 def remove_docker_container(docker_client: Any, container_name: str) -> None:
