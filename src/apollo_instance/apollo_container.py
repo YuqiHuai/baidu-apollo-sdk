@@ -1,4 +1,5 @@
 import os
+import shlex
 import subprocess
 from importlib.resources import files
 from pathlib import Path
@@ -158,10 +159,12 @@ class ApolloContainer:
             True if the file exists, False otherwise.
         """
         logger.info(f"{self.name}: Checking if file exists: {file_path}")
+        quoted_path = shlex.quote(file_path)
         result = self.exec_command(
-            f"test -f {file_path} && echo 'exists' || echo 'not exists'"
+            f"bash -c \"test -f {quoted_path} && echo exists || echo 'not exists'\"",
+            use_apollo_env=False,
         )
-        return "exists" in result
+        return result.strip() == "exists"
 
     def remove_file(self, file_path: str) -> None:
         """Remove a file in the container.
