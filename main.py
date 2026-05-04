@@ -10,19 +10,9 @@ from baidu_apollo_sdk.dreamview import (
     Dreamview,
     DreamviewOperations,
 )
+from baidu_apollo_sdk.logging import setup_logging
 
-logger.remove()
-
-logger.add(
-    sys.stderr,
-    format=(
-        "<level><bold>{level.name[0]}</bold></level>"  # Severity letter
-        "<cyan>{time:MMDD HH:mm:ss.SSSSSS}</cyan> "  # Timestamp
-        "<magenta>{process:5}</magenta> "  # PID
-        "<yellow>{file.name}</yellow>:<yellow>{line}</yellow>] "  # file:line
-        "<level>{message}</level>"  # Message colored by level
-    ),
-)
+setup_logging(level="DEBUG", enable_color=True)
 
 repo = ApolloRepo.from_config()
 

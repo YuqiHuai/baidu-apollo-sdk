@@ -12,7 +12,7 @@ def main() -> None:
     repo.clone()
 
     container = ApolloContainer("yuqi", repo.get_path())
-    cyber_bridge = CyberBridge(container.ip_address)
+    cyber_bridge = CyberBridge(container)
     bridge_client = CyberClient(cyber_bridge)
 
     messages = bridge_client.subscribe(topic=Topics.LocalizationTopic)

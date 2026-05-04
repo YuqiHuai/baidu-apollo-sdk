@@ -38,7 +38,7 @@ def main() -> None:
     repo.clone()
 
     container = ApolloContainer("yuqi", repo.get_path())
-    cyber_bridge = CyberBridge(container.ip_address)
+    cyber_bridge = CyberBridge(container)
     bridge_client = CyberClient(cyber_bridge)
 
     current_time = time.perf_counter()

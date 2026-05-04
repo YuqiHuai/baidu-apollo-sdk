@@ -15,7 +15,11 @@ ctn = ApolloContainer("yuqi", repo.get_path())
 run_time = ApolloRuntime(ctn)
 # run_time.ensure_container(False)
 
-cyber_bridge = CyberBridge(ctn.ip_address)
+run_time.start_bridge()
+
+run_time.wait_for_node('bridge', 0.5)
+
+cyber_bridge = CyberBridge(ctn)
 
 bridge_client = CyberClient(cyber_bridge)
 

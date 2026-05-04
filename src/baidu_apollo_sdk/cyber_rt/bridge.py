@@ -6,13 +6,27 @@ import socket
 from collections import defaultdict
 from collections.abc import Callable
 from threading import Thread
-from typing import Any
+from typing import Any, Protocol
 
 from google.protobuf.descriptor import FileDescriptor
 
 from .channel import Topic
 
 logger = logging.getLogger(__name__)
+
+
+class CyberBridgeContainer(Protocol):
+    """Container interface needed by `CyberBridge`."""
+
+    @property
+    def ip_address(self) -> str:
+        """Return the container IP address or host fallback."""
+        ...
+
+    @property
+    def container_name(self) -> str:
+        """Return the container runtime name."""
+        ...
 
 
 def to_bytes(s: str) -> bytes:
@@ -43,25 +57,29 @@ class CyberBridge:
     """Low-level cyber-bridge socket connection.
 
     Args:
-        host: IP address or hostname for cyber-bridge.
+        container: Apollo container running cyber-bridge.
         port: TCP port for cyber-bridge.
     """
 
+    container: CyberBridgeContainer
     conn: socket.socket
     subscribers: defaultdict[str, list[Callable[[bytes], None]]]
     publishable_channel: set[str]
     spinning: bool
     t: Thread | None
 
-    def __init__(self, host: str, port: int = 9090) -> None:
-        """Connect to a cyber-bridge TCP endpoint.
+    def __init__(
+        self, container: CyberBridgeContainer, port: int = 9090
+    ) -> None:
+        """Connect to the cyber-bridge endpoint in a container.
 
         Args:
-            host: IP address or hostname for cyber-bridge.
+            container: Apollo container running cyber-bridge.
             port: TCP port for cyber-bridge.
         """
+        self.container = container
         self.conn = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.conn.connect((host, port))
+        self.conn.connect((container.ip_address, port))
         self.conn.setblocking(False)
         self.subscribers = defaultdict(list)
         self.publishable_channel = set()
