@@ -66,6 +66,10 @@ class ApolloRuntime:
 
     def start_bridge(self) -> None:
         """Start cyber-bridge in detached mode inside the container."""
+        # check if bridge is already running
+        nodes = self.list_cyber_nodes()
+        if "bridge" in nodes:
+            return
         self.container.exec_command("bash scripts/bridge.sh", detach=True)
 
     def ensure_container(self, restart: bool = False) -> None:
