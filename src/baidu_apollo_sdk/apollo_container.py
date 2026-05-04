@@ -15,14 +15,14 @@ class ApolloContainer:
     """Represents an Apollo development Docker container.
 
     Attributes:
-        name: Short SDK-level container name without the Apollo prefix.
+        instance_name: Short SDK-level container name without the Apollo prefix.
         apollo_path: Path to the Apollo source checkout on the host.
         docker_client: Docker SDK client used for container operations.
     """
 
     DEV_CONTAINER_PREFIX = "apollo_dev_"
 
-    def __init__(self, name: str, apollo_path: str):
+    def __init__(self, instance_name: str, apollo_path: str):
         """Initialize a container wrapper.
 
         Args:
@@ -30,7 +30,7 @@ class ApolloContainer:
                 `apollo_dev_`.
             apollo_path: Host path to the Apollo source checkout.
         """
-        self.name = name
+        self.instance_name = instance_name
         self.apollo_path = apollo_path
         self.docker_client = docker.from_env()
 
@@ -44,14 +44,14 @@ class ApolloContainer:
             RuntimeError: If the packaged startup script is missing, `USER` is
                 unset, or the container does not start successfully.
         """
-        logger.info(f"{self.name}: Starting container")
+        logger.info(f"{self.instance_name}: Starting container")
         script_path = files("baidu_apollo_sdk.scripts") / "dev_start.sh"
 
         if not script_path.is_file():
             raise RuntimeError(f"Script not found: {script_path}")
 
         apollo_docker_scripts_dir = Path(self.apollo_path, "docker", "scripts")
-        cmd = f"bash {script_path} -y -l --name {self.name}"
+        cmd = f"bash {script_path} -y -l --name {self.instance_name}"
         current_user = os.environ.get("USER")
         if not current_user:
             raise RuntimeError("USER environment variable is not set")
@@ -88,7 +88,7 @@ class ApolloContainer:
         Returns:
             The container name, which is the prefix plus the name.
         """
-        return self.DEV_CONTAINER_PREFIX + self.name
+        return self.DEV_CONTAINER_PREFIX + self.instance_name
 
     @property
     def ip_address(self) -> str:
@@ -131,7 +131,7 @@ class ApolloContainer:
             The output of the command if detach is False, otherwise an empty
             string.
         """
-        logger.info(f"{self.name}: Executing command: {command}")
+        logger.info(f"{self.instance_name}: Executing command: {command}")
         container = self.docker_client.containers.get(self.container_name)
         user = os.environ.get("USER")
         assert user is not None, "USER environment variable is not set"
@@ -174,7 +174,7 @@ class ApolloContainer:
 
     def reset(self) -> None:
         """Reset the container by killing all processes except PID 1."""
-        logger.info(f"{self.name}: Resetting container.")
+        logger.info(f"{self.instance_name}: Resetting container.")
         self.exec_command("bash -c \"kill -9 $(ps -eo pid= | awk '$1 != 1')\"")
 
     def check_file_exists(self, file_path: str) -> bool:
@@ -185,7 +185,7 @@ class ApolloContainer:
         Returns:
             True if the file exists, False otherwise.
         """
-        logger.info(f"{self.name}: Checking if file exists: {file_path}")
+        logger.info(f"{self.instance_name}: Checking if file exists: {file_path}")
         quoted_path = shlex.quote(file_path)
         result = self.exec_command(
             f'bash -c "test -f {quoted_path} && '
@@ -200,7 +200,7 @@ class ApolloContainer:
         Args:
             file_path: The path to the file to remove.
         """
-        logger.info(f"{self.name}: Removing file: {file_path}")
+        logger.info(f"{self.instance_name}: Removing file: {file_path}")
         self.exec_command(f"rm -f {file_path}")
 
     def remove_directory(self, dir_path: str) -> None:
@@ -209,7 +209,7 @@ class ApolloContainer:
         Args:
             dir_path: The path to the directory to remove.
         """
-        logger.info(f"{self.name}: Removing directory: {dir_path}")
+        logger.info(f"{self.instance_name}: Removing directory: {dir_path}")
         self.exec_command(f"rm -rf {dir_path}", stream=True)
 
     def copy_file_to_container(
@@ -222,7 +222,7 @@ class ApolloContainer:
             container_path: The path to the file in the container.
         """
         logger.info(
-            f"{self.name}: Copying file from {local_path} to {container_path}"
+            f"{self.instance_name}: Copying file from {local_path} to {container_path}"
         )
         copy_status = subprocess.run(
             [
@@ -250,7 +250,7 @@ class ApolloContainer:
             local_path: The path to the file on the local machine.
         """
         logger.info(
-            f"{self.name}: Copying file from {container_path} to {local_path}"
+            f"{self.instance_name}: Copying file from {container_path} to {local_path}"
         )
         copy_status = subprocess.run(
             [
