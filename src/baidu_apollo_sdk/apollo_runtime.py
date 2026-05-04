@@ -6,6 +6,9 @@ from time import perf_counter, sleep
 import nanoid
 
 from baidu_apollo_sdk.apollo_container import ApolloContainer
+from baidu_apollo_sdk.logging import container_log_prefix, get_logger
+
+logger = get_logger()
 
 
 class ApolloRuntime:
@@ -36,6 +39,7 @@ class ApolloRuntime:
         if not self.container.is_running():
             raise RuntimeError("Container must be running before build")
 
+        logger.info("{} build", container_log_prefix(self.container))
         console_out = self.container.exec_command(
             "bash apollo.sh build", stream=stream
         )
@@ -50,6 +54,7 @@ class ApolloRuntime:
             stream: Whether to stream the output of the bootstrap command.
                     Default is False.
         """
+        logger.info("{} bootstrap", container_log_prefix(self.container))
         self.container.exec_command(
             "bash scripts/bootstrap.sh start_plus", stream=stream
         )
@@ -60,6 +65,7 @@ class ApolloRuntime:
         Args:
             stream: Whether to stream command output.
         """
+        logger.info("{} start dreamview", container_log_prefix(self.container))
         self.container.exec_command(
             "bash scripts/bootstrap.sh start_dreamview", stream=stream
         )
@@ -69,7 +75,11 @@ class ApolloRuntime:
         # check if bridge is already running
         nodes = self.list_cyber_nodes()
         if "bridge" in nodes:
+            logger.info(
+                "{} bridge running", container_log_prefix(self.container)
+            )
             return
+        logger.info("{} start bridge", container_log_prefix(self.container))
         self.container.exec_command("bash scripts/bridge.sh", detach=True)
 
     def ensure_container(self, restart: bool = False) -> None:
@@ -80,6 +90,9 @@ class ApolloRuntime:
                 Default is False.
         """
         if not self.container.is_running() or restart:
+            logger.info(
+                "{} ensure container", container_log_prefix(self.container)
+            )
             self.container.start()
 
     def start_recorder(
@@ -99,10 +112,16 @@ class ApolloRuntime:
             f"{recorder_bin} record -a -o /apollo/data/bag/{record_name} "
             f"-i {segment_duration}"
         )
+        logger.info(
+            "{} start recorder {}",
+            container_log_prefix(self.container),
+            record_name,
+        )
         self.container.exec_command(cmd, detach=True)
 
     def stop_recorder(self) -> None:
         """Stop all running recorders in the container."""
+        logger.info("{} stop recorders", container_log_prefix(self.container))
         self.container.exec_command(
             "bash -c 'pgrep -f cyber_recorder | xargs -r kill -2'"
         )
@@ -114,6 +133,7 @@ class ApolloRuntime:
             A list of cyber node names.
         """
         cyber_node_bin = "/apollo/bazel-bin/cyber/tools/cyber_node/cyber_node"
+        logger.info("{} list cyber nodes", container_log_prefix(self.container))
         output = self.container.exec_command(f"{cyber_node_bin} list")
         lines = output.strip().split("\n")
         nodes = []
@@ -150,6 +170,11 @@ class ApolloRuntime:
         """
 
         start_time = perf_counter()
+        logger.info(
+            "{} wait node {}",
+            container_log_prefix(self.container),
+            node_name,
+        )
         while True:
             nodes = self.list_cyber_nodes()
             if node_name in nodes:
@@ -167,6 +192,7 @@ class ApolloRuntime:
         Returns:
             A list of HD map names.
         """
+        logger.info("{} list maps", container_log_prefix(self.container))
         output = self.container.exec_command(
             "find /apollo/modules/map/data -maxdepth 1"
             " -mindepth 1 -type d -printf '%f\\n'",
@@ -197,6 +223,11 @@ class ApolloRuntime:
             RuntimeError: If the routing/sim map cannot be created for the HD
                 map.
         """
+        logger.info(
+            "{} install map {}",
+            container_log_prefix(self.container),
+            map_name or hd_map_path,
+        )
         maps = self.list_hd_maps()
         if map_name == "":
             map_name = None
@@ -252,6 +283,11 @@ class ApolloRuntime:
                 f"Failed to create sim map for HD map '{map_name}'"
             )
 
+        logger.info(
+            "{} installed map {}",
+            container_log_prefix(self.container),
+            map_name,
+        )
         return map_name
 
     def set_hd_map(self, map_id: str) -> None:
@@ -263,6 +299,9 @@ class ApolloRuntime:
             ValueError: If the specified map ID is not valid.
         """
         # check if map_id is valid
+        logger.info(
+            "{} set map {}", container_log_prefix(self.container), map_id
+        )
         maps = self.list_hd_maps()
         if map_id not in maps:
             raise ValueError(

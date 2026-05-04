@@ -6,8 +6,12 @@ from collections import defaultdict
 from collections.abc import Callable, Iterator
 from typing import Any
 
+from baidu_apollo_sdk.logging import container_log_prefix, get_logger
+
 from .bridge import CyberBridge
 from .channel import Topic
+
+logger = get_logger()
 
 
 class LatestValue:
@@ -89,10 +93,16 @@ class CyberClient:
 
     def start(self) -> None:
         """Start the bridge receive loop in the background."""
+        logger.info(
+            "{} client start", container_log_prefix(self.bridge.container)
+        )
         self.bridge.spin()
 
     def stop(self) -> None:
         """Stop the bridge receive loop."""
+        logger.info(
+            "{} client stop", container_log_prefix(self.bridge.container)
+        )
         self.bridge.stop()
 
     # -----------------------
@@ -112,6 +122,11 @@ class CyberClient:
             self.bridge.add_publisher(topic)
             self._publishers.add(ch)
 
+        logger.debug(
+            "{} publish {}",
+            container_log_prefix(self.bridge.container),
+            ch,
+        )
         self.bridge.publish(topic, msg)
 
     # -----------------------
@@ -133,6 +148,11 @@ class CyberClient:
 
         self.bridge.add_subscriber(topic, bridge_callback)
         self._bridge_subscribed.add(ch)
+        logger.info(
+            "{} client subscribe {}",
+            container_log_prefix(self.bridge.container),
+            ch,
+        )
 
     # -----------------------
     # Streaming subscription

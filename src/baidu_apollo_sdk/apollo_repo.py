@@ -9,6 +9,9 @@ from baidu_apollo_sdk.config import (
     get_apollo_git_url,
     get_apollo_root,
 )
+from baidu_apollo_sdk.logging import get_logger
+
+logger = get_logger()
 
 
 class ApolloRepo:
@@ -64,8 +67,10 @@ class ApolloRepo:
         """
 
         if self.is_cloned():
+            logger.info("repo exists {}", self.target_dir)
             return
 
+        logger.info("repo clone {} -> {}", self.github_url, self.target_dir)
         cmd = [
             "git",
             "clone",
@@ -107,6 +112,7 @@ class ApolloRepo:
         if not ref:
             return
 
+        logger.info("repo checkout {}", ref)
         subprocess.run(
             ["git", "-C", str(self.target_dir), "checkout", ref],
             check=True,
@@ -124,6 +130,7 @@ class ApolloRepo:
         if not self.is_cloned():
             raise RuntimeError("Repository not cloned")
 
+        logger.info("repo pull {}", self.target_dir)
         subprocess.run(
             ["git", "-C", str(self.target_dir), "pull"],
             check=True,

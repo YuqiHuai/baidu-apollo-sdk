@@ -1,6 +1,5 @@
 """Low-level socket protocol client for Apollo cyber-bridge."""
 
-import logging
 import select
 import socket
 from collections import defaultdict
@@ -10,9 +9,11 @@ from typing import Any, Protocol
 
 from google.protobuf.descriptor import FileDescriptor
 
+from baidu_apollo_sdk.logging import container_log_prefix, get_logger
+
 from .channel import Topic
 
-logger = logging.getLogger(__name__)
+logger = get_logger()
 
 
 class CyberBridgeContainer(Protocol):
@@ -79,6 +80,7 @@ class CyberBridge:
         """
         self.container = container
         self.conn = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        logger.info("{} bridge connect", container_log_prefix(self.container))
         self.conn.connect((container.ip_address, port))
         self.conn.setblocking(False)
         self.subscribers = defaultdict(list)
@@ -154,6 +156,11 @@ class CyberBridge:
         if not descriptors:
             return
 
+        logger.debug(
+            "{} register proto descriptors {}",
+            container_log_prefix(self.container),
+            len(descriptors),
+        )
         data = BridgeOp.REGISTER_DESC
         data += len(descriptors).to_bytes(4, byteorder="little")
         for proto_descriptor in descriptors:
@@ -180,6 +187,11 @@ class CyberBridge:
 
         self.__send(data)
         self.subscribers[topic.channel].append(cb)
+        logger.info(
+            "{} subscribe {}",
+            container_log_prefix(self.container),
+            topic.channel,
+        )
 
     def add_publisher(self, topic: Topic[Any]) -> None:
         """Register a publisher with cyber-bridge.
@@ -200,6 +212,11 @@ class CyberBridge:
         data += self.__prepare_bytes(to_bytes(topic_msg_type))
         self.__send(data)
         self.publishable_channel.add(topic.channel)
+        logger.info(
+            "{} add publisher {}",
+            container_log_prefix(self.container),
+            topic.channel,
+        )
 
     def on_read(self, data: bytes) -> None:
         """Dispatch a complete inbound wire-protocol packet.
@@ -211,7 +228,11 @@ class CyberBridge:
         if op == int.from_bytes(BridgeOp.PUBLISH, "big"):
             self.receive_publish(data)
         else:
-            pass
+            logger.warning(
+                "{} unknown bridge op {}",
+                container_log_prefix(self.container),
+                op,
+            )
 
     def __get_32_le(self, b: bytes) -> int:
         """Convert 4 little-endian bytes to an integer.
@@ -272,7 +293,9 @@ class CyberBridge:
                 return
 
             op = self._buffer[0]
-            logger.debug("Received op: %s", op)
+            logger.debug(
+                "{} rx op {}", container_log_prefix(self.container), op
+            )
 
             # Need at least 1 + 4 bytes for topic length
             if len(self._buffer) < 5:
@@ -288,7 +311,11 @@ class CyberBridge:
                 return
 
             topic = self._buffer[offset : offset + topic_length]
-            logger.debug("Received topic: %s", topic.decode("ascii"))
+            logger.debug(
+                "{} rx topic {}",
+                container_log_prefix(self.container),
+                topic.decode("ascii"),
+            )
             offset += topic_length
 
             message_size = self.__get_32_le(self._buffer[offset : offset + 4])
@@ -318,15 +345,24 @@ class CyberBridge:
                 self._process_buffer()
 
             except ConnectionResetError:
-                logger.error("Connection reset by peer")
+                logger.error(
+                    "{} bridge reset", container_log_prefix(self.container)
+                )
                 break
 
             except OSError as e:
-                logger.error("Socket error: %s", e)
+                logger.error(
+                    "{} bridge socket error: {}",
+                    container_log_prefix(self.container),
+                    e,
+                )
                 break
 
             except Exception:  # pylint: disable=broad-exception-caught
-                logger.exception("Unexpected error in _spin loop")
+                logger.exception(
+                    "{} bridge spin failed",
+                    container_log_prefix(self.container),
+                )
                 break
 
         self.spinning = False
@@ -335,12 +371,14 @@ class CyberBridge:
         """Start the socket receive loop in a background thread."""
         if self.spinning:
             return
+        logger.info("{} bridge spin", container_log_prefix(self.container))
         self.spinning = True
         self.t = Thread(target=self._spin)
         self.t.start()
 
     def stop(self) -> None:
         """Stop the socket receive loop and wait for its thread to exit."""
+        logger.info("{} bridge stop", container_log_prefix(self.container))
         self.spinning = False
         if self.t is not None:
             self.t.join()

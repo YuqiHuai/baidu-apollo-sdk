@@ -4,8 +4,11 @@ import json
 from typing import Any, cast
 
 import nanoid
-from loguru import logger
 from websocket import create_connection
+
+from baidu_apollo_sdk.logging import container_log_prefix, get_logger
+
+logger = get_logger()
 
 
 class DreamviewModes:
@@ -79,6 +82,9 @@ class Dreamview:
         self.ctn = ctn
         self.socket_client: Any | None = None
 
+    def _log_prefix(self) -> str:
+        return container_log_prefix(self.ctn)
+
     def ws_address(self) -> str:
         """Return the Dreamview WebSocket URL.
 
@@ -89,9 +95,9 @@ class Dreamview:
 
     def connect(self) -> None:
         """Open the Dreamview WebSocket connection."""
-        logger.info(f"{self.ctn.ip_address}: Connecting to Dreamview WebSocket")
+        logger.info("{} dreamview connect", self._log_prefix())
         self.socket_client = create_connection(self.ws_address())
-        logger.info(f"{self.ctn.ip_address}: Connected to Dreamview WebSocket")
+        logger.info("{} dreamview connected", self._log_prefix())
 
     def _socket(self) -> Any:
         """Return the connected WebSocket client.
@@ -121,9 +127,7 @@ class Dreamview:
         payload = get_hmi_action_request_payload(
             "CHANGE_MODE", mode, "noResponse"
         )
-        logger.info(
-            f"{self.ctn.ip_address}: Switching Dreamview mode to {mode}"
-        )
+        logger.info("{} set mode {}", self._log_prefix(), mode)
         self._socket().send(json.dumps(payload))
 
     def start_module(self, module_name: str) -> None:
@@ -136,7 +140,7 @@ class Dreamview:
         payload = get_hmi_action_request_payload(
             "START_MODULE", module_name, f"HMIAction!{request_id}"
         )
-        logger.info(f"{self.ctn.ip_address}: Starting module {module_name}")
+        logger.info("{} start module {}", self._log_prefix(), module_name)
         self._socket().send(json.dumps(payload))
 
     def stop_module(self, module_name: str) -> None:
@@ -149,7 +153,7 @@ class Dreamview:
         payload = get_hmi_action_request_payload(
             "STOP_MODULE", module_name, f"HMIAction!{request_id}"
         )
-        logger.info(f"{self.ctn.ip_address}: Stopping module {module_name}")
+        logger.info("{} stop module {}", self._log_prefix(), module_name)
         self._socket().send(json.dumps(payload))
 
     def set_operation(self, operation: str) -> bool:
@@ -172,9 +176,7 @@ class Dreamview:
             "CHANGE_OPERATION", operation, f"HMIAction!{request_id}"
         )
         # send the request
-        logger.info(
-            f"{self.ctn.ip_address}: Setting Dreamview operation to {operation}"
-        )
+        logger.info("{} set operation {}", self._log_prefix(), operation)
         self._socket().send(json.dumps(payload))
         # Wait for the matching HMIAction response.
         while True:
@@ -193,8 +195,7 @@ class Dreamview:
                     .get("isOk", False)
                 ):
                     logger.info(
-                        f"{self.ctn.ip_address}: Set Dreamview operation "
-                        f"to {operation}"
+                        "{} operation set {}", self._log_prefix(), operation
                     )
                 else:
                     message = (
@@ -204,8 +205,10 @@ class Dreamview:
                         .get("message", "")
                     )
                     logger.warning(
-                        f"{self.ctn.ip_address}: Failed to set Dreamview "
-                        f"operation to {operation}. Reason: {message}"
+                        "{} operation failed {}: {}",
+                        self._log_prefix(),
+                        operation,
+                        message,
                     )
                 return True
 
@@ -231,18 +234,14 @@ class Dreamview:
         payload = get_hmi_action_request_payload(
             "CHANGE_VEHICLE", vehicle, "noResponse"
         )
-        logger.info(
-            f"{self.ctn.ip_address}: Setting Dreamview vehicle to {vehicle}"
-        )
+        logger.info("{} set vehicle {}", self._log_prefix(), vehicle)
         self._socket().send(json.dumps(payload))
         # wait for the response
         while True:
             response = self._socket().recv()
             response_json = json.loads(response)
             if response_json.get("type") == "VehicleParam":
-                logger.info(
-                    f"{self.ctn.ip_address}: Set Dreamview vehicle to {vehicle}"
-                )
+                logger.info("{} vehicle set {}", self._log_prefix(), vehicle)
                 return cast(dict[str, Any], response_json)
 
     def check_routing_point(self, x: float, y: float, heading: float) -> bool:
@@ -278,8 +277,11 @@ class Dreamview:
             "action": "request",
         }
         logger.info(
-            f"{self.ctn.ip_address}: Checking routing point "
-            f"({x}, {y}, {heading})"
+            "{} check route point ({}, {}, {})",
+            self._log_prefix(),
+            x,
+            y,
+            heading,
         )
         self._socket().send(json.dumps(payload))
         # wait for the response
@@ -303,9 +305,7 @@ class Dreamview:
                     == 1
                 )
                 if is_legal:
-                    logger.info(
-                        f"{self.ctn.ip_address}: Routing point is legal"
-                    )
+                    logger.info("{} route point legal", self._log_prefix())
                 if not is_legal:
                     message = (
                         response_json.get("data", {})
@@ -313,8 +313,9 @@ class Dreamview:
                         .get("message", "")
                     )
                     logger.warning(
-                        f"{self.ctn.ip_address}: Routing point is illegal. "
-                        f"Reason: {message}"
+                        "{} route point illegal: {}",
+                        self._log_prefix(),
+                        message,
                     )
                 return is_legal
 
@@ -352,14 +353,20 @@ class Dreamview:
         # check the point legality first
         if not self.check_routing_point(x, y, heading):
             logger.error(
-                f"{self.ctn.ip_address}: Failed to set start point to "
-                f"({x}, {y}, {heading}) due to illegal point"
+                "{} start point illegal ({}, {}, {})",
+                self._log_prefix(),
+                x,
+                y,
+                heading,
             )
             return False
         # send the request
         logger.info(
-            f"{self.ctn.ip_address}: Setting start point to "
-            f"({x}, {y}, {heading})"
+            "{} set start point ({}, {}, {})",
+            self._log_prefix(),
+            x,
+            y,
+            heading,
         )
         self._socket().send(json.dumps(payload))
         # wait for the response
@@ -384,14 +391,13 @@ class Dreamview:
                         .get("message", "")
                     )
                     logger.error(
-                        f"{self.ctn.ip_address}: Failed to set start point. "
-                        f"Reason: {message}"
+                        "{} start point failed: {}",
+                        self._log_prefix(),
+                        message,
                     )
                     return False
                 else:
-                    logger.info(
-                        f"{self.ctn.ip_address}: Set start point successfully"
-                    )
+                    logger.info("{} start point set", self._log_prefix())
                     return True
 
     def start_routing(self, waypoints: list[dict[str, float]]) -> bool:
@@ -408,8 +414,9 @@ class Dreamview:
         for waypoint in waypoints:
             if not all(k in waypoint for k in ("x", "y", "heading")):
                 logger.error(
-                    f"{self.ctn.ip_address}: Failed to start routing due to "
-                    f"illegal waypoint format: {waypoint}"
+                    "{} route invalid waypoint {}",
+                    self._log_prefix(),
+                    waypoint,
                 )
                 return False
         # validate waypoints are valid routing points
@@ -424,8 +431,9 @@ class Dreamview:
                     f"({waypoint_x}, {waypoint_y}, {waypoint_heading})"
                 )
                 logger.error(
-                    f"{self.ctn.ip_address}: Failed to start routing due to "
-                    f"illegal waypoint {waypoint_text}"
+                    "{} route illegal waypoint {}",
+                    self._log_prefix(),
+                    waypoint_text,
                 )
                 return False
         request_id = nanoid.generate()
@@ -453,8 +461,9 @@ class Dreamview:
             "action": "request",
         }
         logger.info(
-            f"{self.ctn.ip_address}: Starting routing with "
-            f"{len(waypoints)} waypoints"
+            "{} start route {} waypoints",
+            self._log_prefix(),
+            len(waypoints),
         )
         self._socket().send(json.dumps(payload))
         # wait for response
@@ -479,14 +488,11 @@ class Dreamview:
                         .get("message", "")
                     )
                     logger.error(
-                        f"{self.ctn.ip_address}: Failed to start routing. "
-                        f"Reason: {message}"
+                        "{} route failed: {}", self._log_prefix(), message
                     )
                     return False
                 else:
-                    logger.info(
-                        f"{self.ctn.ip_address}: Started routing successfully"
-                    )
+                    logger.info("{} route started", self._log_prefix())
                     return True
 
     def load_dynamic_models(self) -> None:
@@ -494,7 +500,7 @@ class Dreamview:
         payload = get_hmi_action_request_payload(
             "LOAD_DYNAMIC_MODELS", "", "noResponse"
         )
-        logger.info(f"{self.ctn.ip_address}: Loading dynamic models")
+        logger.info("{} load dynamic models", self._log_prefix())
         self._socket().send(json.dumps(payload))
 
     def change_dynamic_model(self) -> None:
@@ -503,8 +509,8 @@ class Dreamview:
             "CHANGE_DYNAMIC_MODEL", "Simulation Perfect Control", "noResponse"
         )
         logger.info(
-            f"{self.ctn.ip_address}: Changing dynamic model to "
-            "Simulation Perfect Control"
+            "{} set dynamic model Simulation Perfect Control",
+            self._log_prefix(),
         )
         self._socket().send(json.dumps(payload))
 
