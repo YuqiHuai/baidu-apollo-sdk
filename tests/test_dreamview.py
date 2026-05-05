@@ -1,0 +1,176 @@
+from __future__ import annotations
+
+import json
+from collections.abc import Callable
+from typing import Any
+
+import pytest
+from websocket import WebSocketConnectionClosedException
+
+from baidu_apollo_sdk.dreamview import (
+    Dreamview,
+    DreamviewConnectionError,
+    DreamviewModes,
+    DreamviewOperations,
+)
+
+
+class FakeDreamviewContainer:
+    @property
+    def ip_address(self) -> str:
+        return "172.17.0.2"
+
+    @property
+    def container_name(self) -> str:
+        return "apollo_dev_test"
+
+
+class FakeWebSocket:
+    def __init__(
+        self,
+        *,
+        send_error: Exception | None = None,
+        recv_items: list[str | Exception | Callable[[], str]] | None = None,
+    ) -> None:
+        self.send_error = send_error
+        self.recv_items = recv_items or []
+        self.sent: list[dict[str, Any]] = []
+        self.closed = False
+
+    def send(self, data: str) -> int:
+        if self.send_error is not None:
+            exc = self.send_error
+            self.send_error = None
+            raise exc
+        self.sent.append(json.loads(data))
+        return len(data)
+
+    def recv(self) -> str:
+        item = self.recv_items.pop(0)
+        if isinstance(item, Exception):
+            raise item
+        if callable(item):
+            return item()
+        return item
+
+    def close(self) -> None:
+        self.closed = True
+
+
+def test_dreamview_connect_wraps_connection_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def create_failing_connection(address: str) -> FakeWebSocket:
+        assert address == "ws://172.17.0.2:8888/websocket"
+        raise OSError("unreachable")
+
+    monkeypatch.setattr(
+        "baidu_apollo_sdk.dreamview.create_connection",
+        create_failing_connection,
+    )
+
+    dreamview = Dreamview(FakeDreamviewContainer())
+
+    with pytest.raises(DreamviewConnectionError, match="Failed to connect"):
+        dreamview.connect()
+
+    assert dreamview.socket_client is None
+
+
+def test_dreamview_reconnects_and_retries_send(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    first_socket = FakeWebSocket(
+        send_error=WebSocketConnectionClosedException("closed")
+    )
+    second_socket = FakeWebSocket()
+    sockets = [first_socket, second_socket]
+
+    def create_fake_connection(address: str) -> FakeWebSocket:
+        assert address == "ws://172.17.0.2:8888/websocket"
+        return sockets.pop(0)
+
+    monkeypatch.setattr(
+        "baidu_apollo_sdk.dreamview.create_connection",
+        create_fake_connection,
+    )
+
+    dreamview = Dreamview(FakeDreamviewContainer())
+    dreamview.connect()
+    dreamview.set_mode(DreamviewModes.PNC)
+
+    assert first_socket.closed is True
+    assert second_socket.sent[0]["data"]["info"] == {
+        "action": "CHANGE_MODE",
+        "value": DreamviewModes.PNC,
+    }
+    assert dreamview.socket_client is second_socket
+
+
+def test_dreamview_reconnects_and_replays_request_after_recv_loss(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    first_socket = FakeWebSocket(
+        recv_items=[WebSocketConnectionClosedException("closed")]
+    )
+    second_socket = FakeWebSocket()
+    sockets = [first_socket, second_socket]
+
+    def create_fake_connection(address: str) -> FakeWebSocket:
+        assert address == "ws://172.17.0.2:8888/websocket"
+        return sockets.pop(0)
+
+    def recv_success_response() -> str:
+        request_id = second_socket.sent[0]["data"]["requestId"]
+        return json.dumps(
+            {
+                "action": "response",
+                "data": {
+                    "requestId": request_id,
+                    "info": {"data": {"isOk": True}},
+                },
+            }
+        )
+
+    second_socket.recv_items.append(recv_success_response)
+    monkeypatch.setattr(
+        "baidu_apollo_sdk.dreamview.create_connection",
+        create_fake_connection,
+    )
+
+    dreamview = Dreamview(FakeDreamviewContainer())
+    dreamview.connect()
+
+    assert dreamview.set_operation(DreamviewOperations.SIM_CONTROL) is True
+    assert first_socket.closed is True
+    assert first_socket.sent[0]["data"]["info"]["action"] == "CHANGE_OPERATION"
+    assert second_socket.sent[0]["data"]["info"] == {
+        "action": "CHANGE_OPERATION",
+        "value": DreamviewOperations.SIM_CONTROL,
+    }
+
+
+def test_dreamview_can_disable_auto_reconnect(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    socket = FakeWebSocket(
+        send_error=WebSocketConnectionClosedException("closed")
+    )
+
+    def create_fake_connection(address: str) -> FakeWebSocket:
+        assert address == "ws://172.17.0.2:8888/websocket"
+        return socket
+
+    monkeypatch.setattr(
+        "baidu_apollo_sdk.dreamview.create_connection",
+        create_fake_connection,
+    )
+
+    dreamview = Dreamview(FakeDreamviewContainer(), auto_reconnect=False)
+    dreamview.connect()
+
+    with pytest.raises(DreamviewConnectionError, match="connection lost"):
+        dreamview.set_mode(DreamviewModes.PNC)
+
+    assert socket.closed is True
+    assert dreamview.socket_client is None

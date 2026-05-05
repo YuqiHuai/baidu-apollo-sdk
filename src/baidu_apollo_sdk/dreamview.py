@@ -1,14 +1,23 @@
 """Dreamview WebSocket client helpers."""
 
 import json
+from collections.abc import Callable
 from typing import Any, cast
 
 import nanoid
-from websocket import create_connection
+from websocket import (
+    WebSocketConnectionClosedException,
+    WebSocketException,
+    create_connection,
+)
 
 from baidu_apollo_sdk.logging import container_log_prefix, get_logger
 
 logger = get_logger()
+
+
+class DreamviewConnectionError(RuntimeError):
+    """Raised when the Dreamview WebSocket connection fails."""
 
 
 class DreamviewModes:
@@ -73,13 +82,26 @@ class Dreamview:
         socket_client: WebSocket client after `connect()` succeeds.
     """
 
-    def __init__(self, ctn: Any) -> None:
+    def __init__(
+        self,
+        ctn: Any,
+        *,
+        auto_reconnect: bool = True,
+        reconnect_attempts: int = 1,
+    ) -> None:
         """Initialize a Dreamview client.
 
         Args:
             ctn: Container-like object with an `ip_address` property.
+            auto_reconnect: Whether to reopen the WebSocket after a connection
+                failure and retry the in-flight request.
+            reconnect_attempts: Maximum reconnect retries per SDK operation.
         """
+        if reconnect_attempts < 0:
+            raise ValueError("reconnect_attempts must be non-negative")
         self.ctn = ctn
+        self.auto_reconnect = auto_reconnect
+        self.reconnect_attempts = reconnect_attempts
         self.socket_client: Any | None = None
 
     def _log_prefix(self) -> str:
@@ -96,8 +118,31 @@ class Dreamview:
     def connect(self) -> None:
         """Open the Dreamview WebSocket connection."""
         logger.info("{} dreamview connect", self._log_prefix())
-        self.socket_client = create_connection(self.ws_address())
+        try:
+            self.socket_client = create_connection(self.ws_address())
+        except (OSError, WebSocketException) as exc:
+            self.socket_client = None
+            raise DreamviewConnectionError(
+                f"Failed to connect to Dreamview at {self.ws_address()}"
+            ) from exc
         logger.info("{} dreamview connected", self._log_prefix())
+
+    def close(self) -> None:
+        """Close the Dreamview WebSocket connection if one is open."""
+        socket_client = self.socket_client
+        self.socket_client = None
+        if socket_client is None:
+            return
+        try:
+            socket_client.close()
+        except (OSError, WebSocketException):
+            logger.debug("{} dreamview close failed", self._log_prefix())
+
+    def reconnect(self) -> None:
+        """Close the current WebSocket and open a fresh connection."""
+        logger.warning("{} dreamview reconnect", self._log_prefix())
+        self.close()
+        self.connect()
 
     def _socket(self) -> Any:
         """Return the connected WebSocket client.
@@ -111,6 +156,64 @@ class Dreamview:
         if self.socket_client is None:
             raise RuntimeError("Dreamview WebSocket is not connected")
         return self.socket_client
+
+    @staticmethod
+    def _is_connection_error(exc: Exception) -> bool:
+        return isinstance(
+            exc,
+            (
+                BrokenPipeError,
+                ConnectionError,
+                ConnectionResetError,
+                OSError,
+                WebSocketConnectionClosedException,
+            ),
+        )
+
+    def _handle_connection_failure(
+        self, exc: Exception, attempts_used: int
+    ) -> None:
+        if not self._is_connection_error(exc):
+            raise exc
+        if not self.auto_reconnect or attempts_used >= self.reconnect_attempts:
+            self.close()
+            raise DreamviewConnectionError(
+                "Dreamview WebSocket connection lost"
+            ) from exc
+        self.reconnect()
+
+    def _send_payload(self, payload: dict[str, Any]) -> None:
+        attempts_used = 0
+        data = json.dumps(payload)
+        while True:
+            try:
+                self._socket().send(data)
+                return
+            except Exception as exc:
+                self._handle_connection_failure(exc, attempts_used)
+                attempts_used += 1
+
+    def _recv_json(self) -> dict[str, Any]:
+        response = self._socket().recv()
+        return cast(dict[str, Any], json.loads(response))
+
+    def _send_and_wait_for_response(
+        self,
+        payload: dict[str, Any],
+        is_expected_response: Callable[[dict[str, Any]], bool],
+    ) -> dict[str, Any]:
+        attempts_used = 0
+        while True:
+            self._send_payload(payload)
+            while True:
+                try:
+                    response_json = self._recv_json()
+                except Exception as exc:
+                    self._handle_connection_failure(exc, attempts_used)
+                    attempts_used += 1
+                    break
+                if is_expected_response(response_json):
+                    return response_json
 
     def set_mode(self, mode: str) -> None:
         """Set the active Dreamview mode.
@@ -128,7 +231,7 @@ class Dreamview:
             "CHANGE_MODE", mode, "noResponse"
         )
         logger.info("{} set mode {}", self._log_prefix(), mode)
-        self._socket().send(json.dumps(payload))
+        self._send_payload(payload)
 
     def start_module(self, module_name: str) -> None:
         """Request Dreamview to start a module.
@@ -141,7 +244,7 @@ class Dreamview:
             "START_MODULE", module_name, f"HMIAction!{request_id}"
         )
         logger.info("{} start module {}", self._log_prefix(), module_name)
-        self._socket().send(json.dumps(payload))
+        self._send_payload(payload)
 
     def stop_module(self, module_name: str) -> None:
         """Request Dreamview to stop a module.
@@ -154,7 +257,7 @@ class Dreamview:
             "STOP_MODULE", module_name, f"HMIAction!{request_id}"
         )
         logger.info("{} stop module {}", self._log_prefix(), module_name)
-        self._socket().send(json.dumps(payload))
+        self._send_payload(payload)
 
     def set_operation(self, operation: str) -> bool:
         """Set the active Dreamview operation.
@@ -177,40 +280,34 @@ class Dreamview:
         )
         # send the request
         logger.info("{} set operation {}", self._log_prefix(), operation)
-        self._socket().send(json.dumps(payload))
-        # Wait for the matching HMIAction response.
-        while True:
-            response = self._socket().recv()
-            response_json = json.loads(response)
-            if (
-                response_json.get("action") == "response"
-                and response_json.get("data", {}).get("requestId")
-                == f"HMIAction!{request_id}"
-            ):
-                # Warn when Dreamview returns a failed operation response.
-                if (
-                    response_json.get("data", {})
-                    .get("info", {})
-                    .get("data", {})
-                    .get("isOk", False)
-                ):
-                    logger.info(
-                        "{} operation set {}", self._log_prefix(), operation
-                    )
-                else:
-                    message = (
-                        response_json.get("data", {})
-                        .get("info", {})
-                        .get("data", {})
-                        .get("message", "")
-                    )
-                    logger.warning(
-                        "{} operation failed {}: {}",
-                        self._log_prefix(),
-                        operation,
-                        message,
-                    )
-                return True
+        response_json = self._send_and_wait_for_response(
+            payload,
+            lambda response: response.get("action") == "response"
+            and response.get("data", {}).get("requestId")
+            == f"HMIAction!{request_id}",
+        )
+        # Warn when Dreamview returns a failed operation response.
+        if (
+            response_json.get("data", {})
+            .get("info", {})
+            .get("data", {})
+            .get("isOk", False)
+        ):
+            logger.info("{} operation set {}", self._log_prefix(), operation)
+        else:
+            message = (
+                response_json.get("data", {})
+                .get("info", {})
+                .get("data", {})
+                .get("message", "")
+            )
+            logger.warning(
+                "{} operation failed {}: {}",
+                self._log_prefix(),
+                operation,
+                message,
+            )
+        return True
 
     def set_vehicle(self, vehicle: str) -> dict[str, Any]:
         """Set the active Dreamview vehicle profile.
@@ -235,14 +332,11 @@ class Dreamview:
             "CHANGE_VEHICLE", vehicle, "noResponse"
         )
         logger.info("{} set vehicle {}", self._log_prefix(), vehicle)
-        self._socket().send(json.dumps(payload))
-        # wait for the response
-        while True:
-            response = self._socket().recv()
-            response_json = json.loads(response)
-            if response_json.get("type") == "VehicleParam":
-                logger.info("{} vehicle set {}", self._log_prefix(), vehicle)
-                return cast(dict[str, Any], response_json)
+        response_json = self._send_and_wait_for_response(
+            payload, lambda response: response.get("type") == "VehicleParam"
+        )
+        logger.info("{} vehicle set {}", self._log_prefix(), vehicle)
+        return response_json
 
     def check_routing_point(self, x: float, y: float, heading: float) -> bool:
         """Check whether a routing point is legal in Dreamview.
@@ -283,41 +377,34 @@ class Dreamview:
             y,
             heading,
         )
-        self._socket().send(json.dumps(payload))
-        # wait for the response
-        while True:
-            response = self._socket().recv()
-            response_json = json.loads(response)
-            # Wait for the matching CheckRoutingPoint response.
-            if (
-                response_json.get("action") == "response"
-                and response_json.get("data", {}).get("requestId")
-                == f"CheckRoutingPoint!{request_id}"
-            ):
-                # data.info.data.isLegao == 1
-                is_legal = bool(
-                    cast(
-                        dict[str, Any],
-                        response_json.get("data", {})
-                        .get("info", {})
-                        .get("data", {}),
-                    ).get("isLegal", 0)
-                    == 1
-                )
-                if is_legal:
-                    logger.info("{} route point legal", self._log_prefix())
-                if not is_legal:
-                    message = (
-                        response_json.get("data", {})
-                        .get("info", {})
-                        .get("message", "")
-                    )
-                    logger.warning(
-                        "{} route point illegal: {}",
-                        self._log_prefix(),
-                        message,
-                    )
-                return is_legal
+        response_json = self._send_and_wait_for_response(
+            payload,
+            lambda response: response.get("action") == "response"
+            and response.get("data", {}).get("requestId")
+            == f"CheckRoutingPoint!{request_id}",
+        )
+        # data.info.data.isLegao == 1
+        is_legal = bool(
+            cast(
+                dict[str, Any],
+                response_json.get("data", {}).get("info", {}).get("data", {}),
+            ).get("isLegal", 0)
+            == 1
+        )
+        if is_legal:
+            logger.info("{} route point legal", self._log_prefix())
+        if not is_legal:
+            message = (
+                response_json.get("data", {})
+                .get("info", {})
+                .get("message", "")
+            )
+            logger.warning(
+                "{} route point illegal: {}",
+                self._log_prefix(),
+                message,
+            )
+        return is_legal
 
     def set_start_point(self, x: float, y: float, heading: float) -> bool:
         """Set the simulation start point in Dreamview.
@@ -368,37 +455,25 @@ class Dreamview:
             y,
             heading,
         )
-        self._socket().send(json.dumps(payload))
-        # wait for the response
-        while True:
-            response = self._socket().recv()
-            response_json = json.loads(response)
-
-            # Wait for the matching SetStartPoint response.
-            if (
-                response_json.get("action") == "response"
-                and response_json.get("data", {}).get("requestId")
-                == f"SetStartPoint!{request_id}"
-            ):
-                # check response.data.code.info == -1 for failure
-                if (
-                    response_json.get("data", {}).get("info", {}).get("code", 0)
-                    == -1
-                ):
-                    message = (
-                        response_json.get("data", {})
-                        .get("info", {})
-                        .get("message", "")
-                    )
-                    logger.error(
-                        "{} start point failed: {}",
-                        self._log_prefix(),
-                        message,
-                    )
-                    return False
-                else:
-                    logger.info("{} start point set", self._log_prefix())
-                    return True
+        response_json = self._send_and_wait_for_response(
+            payload,
+            lambda response: response.get("action") == "response"
+            and response.get("data", {}).get("requestId")
+            == f"SetStartPoint!{request_id}",
+        )
+        # check response.data.code.info == -1 for failure
+        if response_json.get("data", {}).get("info", {}).get("code", 0) == -1:
+            message = (
+                response_json.get("data", {}).get("info", {}).get("message", "")
+            )
+            logger.error(
+                "{} start point failed: {}",
+                self._log_prefix(),
+                message,
+            )
+            return False
+        logger.info("{} start point set", self._log_prefix())
+        return True
 
     def start_routing(self, waypoints: list[dict[str, float]]) -> bool:
         """Send a routing request to Dreamview.
@@ -465,35 +540,21 @@ class Dreamview:
             self._log_prefix(),
             len(waypoints),
         )
-        self._socket().send(json.dumps(payload))
-        # wait for response
-        while True:
-            response = self._socket().recv()
-            response_json = json.loads(response)
-
-            # Wait for the matching SendRoutingRequest response.
-            if (
-                response_json.get("action") == "response"
-                and response_json.get("data", {}).get("requestId")
-                == f"SendRoutingRequest!{request_id}"
-            ):
-                # check response.data.code.info == -1 for failure
-                if (
-                    response_json.get("data", {}).get("info", {}).get("code", 0)
-                    == -1
-                ):
-                    message = (
-                        response_json.get("data", {})
-                        .get("info", {})
-                        .get("message", "")
-                    )
-                    logger.error(
-                        "{} route failed: {}", self._log_prefix(), message
-                    )
-                    return False
-                else:
-                    logger.info("{} route started", self._log_prefix())
-                    return True
+        response_json = self._send_and_wait_for_response(
+            payload,
+            lambda response: response.get("action") == "response"
+            and response.get("data", {}).get("requestId")
+            == f"SendRoutingRequest!{request_id}",
+        )
+        # check response.data.code.info == -1 for failure
+        if response_json.get("data", {}).get("info", {}).get("code", 0) == -1:
+            message = (
+                response_json.get("data", {}).get("info", {}).get("message", "")
+            )
+            logger.error("{} route failed: {}", self._log_prefix(), message)
+            return False
+        logger.info("{} route started", self._log_prefix())
+        return True
 
     def load_dynamic_models(self) -> None:
         """Request Dreamview to load available dynamic models."""
@@ -501,7 +562,7 @@ class Dreamview:
             "LOAD_DYNAMIC_MODELS", "", "noResponse"
         )
         logger.info("{} load dynamic models", self._log_prefix())
-        self._socket().send(json.dumps(payload))
+        self._send_payload(payload)
 
     def change_dynamic_model(self) -> None:
         """Switch Dreamview to the Simulation Perfect Control dynamic model."""
@@ -512,7 +573,7 @@ class Dreamview:
             "{} set dynamic model Simulation Perfect Control",
             self._log_prefix(),
         )
-        self._socket().send(json.dumps(payload))
+        self._send_payload(payload)
 
     def set_up_for_sim_control(self) -> dict[str, Any]:
         """Configure Dreamview for simulation control.
