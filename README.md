@@ -99,3 +99,13 @@ uv run python examples/publish_traffic_light.py
 The publish example builds a `TrafficLightDetection` protobuf message, serializes
 it with `SerializeToString()`, and publishes the bytes with
 `bridge_client.publish(topic=Topics.TrafficLightTopic, msg=raw)`.
+
+Run a Dreamview simulation-control scenario:
+
+```bash
+uv run python examples/run_dreamview_scenario.py
+```
+
+The Dreamview scenario starts the development container, configures the
+`borregas_ave` map, starts planning, records a short route, and prints the
+Dreamview URL.
