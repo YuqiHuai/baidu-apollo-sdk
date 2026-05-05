@@ -35,14 +35,14 @@ wheels = [
 
 [[package]]
 name = "baidu-apollo-proto"
-version = "1.0.0"
+version = "1.0.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "protobuf" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/42/ec/75291bc1f7fe3f9691712a763a7da9a058df5a445443d7cd85e2271f0981/baidu_apollo_proto-1.0.0.tar.gz", hash = "sha256:e1a87261fa5118de246b456bca2056e94fc9923a1a32d78769588dcd2a2bd61f", size = 756188, upload-time = "2026-05-01T19:31:25.714Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/b8/31/0d7e4c38325dd4e918a00ccf4e51d48b39c752d864bdd3d6f39e16e58bfc/baidu_apollo_proto-1.0.1.tar.gz", hash = "sha256:1b6f691e644cc184cee4fdd2d8651d3b1e2dfc169265c29ae9fc4e155594f4c3", size = 854619, upload-time = "2026-05-05T05:59:16.665Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/d4/3c/a2e0e3288722b3a97250e0d8a84bf30937f15b8909eb18397c763483324e/baidu_apollo_proto-1.0.0-py3-none-any.whl", hash = "sha256:8495122898267afd67af15b5bea9e9f8b79806856470fc0e02acf8734246e7bb", size = 1191762, upload-time = "2026-05-01T19:31:27.503Z" },
+    { url = "https://files.pythonhosted.org/packages/97/87/eadbb023cbda662611be52ccc15847e66915f76700222df577b89b829be7/baidu_apollo_proto-1.0.1-py3-none-any.whl", hash = "sha256:949cce10603626ef7f38500f3be12119b5c2573fba06b32a4131b38b004cc688", size = 1544796, upload-time = "2026-05-05T05:59:18.635Z" },
 ]
 
 [[package]]
@@ -69,7 +69,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "baidu-apollo-proto", specifier = ">=1.0.0" },
+    { name = "baidu-apollo-proto", specifier = "==1.0.1" },
     { name = "docker", specifier = ">=7.1.0" },
     { name = "loguru", specifier = ">=0.7.3" },
     { name = "nanoid", specifier = ">=2.0.0" },
