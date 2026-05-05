@@ -213,7 +213,7 @@ class ApolloContainer:
             dir_path: The path to the directory to remove.
         """
         logger.info("{} remove dir {}", container_log_prefix(self), dir_path)
-        self.exec_command(f"rm -rf {dir_path}", stream=True)
+        self.exec_command(f"rm -rf {dir_path}", stream=False)
 
     def copy_file_to_container(
         self, local_path: str, container_path: str
