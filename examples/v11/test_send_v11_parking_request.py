@@ -1,14 +1,10 @@
 """Send one v11 parking request to the HTTP bridge inside Apollo."""
 
-import json
 from pathlib import Path
-from typing import Any
-from urllib.error import HTTPError
-from urllib.request import Request, urlopen
 
 from baidu_apollo_sdk.apollo_container import ApolloContainer
 from baidu_apollo_sdk.apollo_runtime import ApolloRuntime
-from baidu_apollo_sdk.commands import Pose
+from baidu_apollo_sdk.commands import CommandSender, ParkingCommand, Pose
 from baidu_apollo_sdk.dreamview import Dreamview
 
 APOLLO_V11_PATH = Path("/home/yuqi/ResearchWorkspace/ICSE_2027/apollo-v11.0.0")
@@ -18,23 +14,6 @@ START_POSE = Pose(
     y=4141425.760698328,
     heading=-0.207496226,
 )
-
-
-def _post_json(url: str, payload: dict[str, Any]) -> dict[str, Any] | None:
-    request = Request(
-        url,
-        data=json.dumps(payload).encode("utf-8"),
-        headers={"Content-Type": "application/json"},
-        method="POST",
-    )
-    try:
-        with urlopen(request) as response:  # noqa: S310
-            response_body = response.read()
-    except HTTPError as exc:
-        response_body = exc.read()
-    if not response_body:
-        return None
-    return json.loads(response_body.decode("utf-8"))
 
 
 def main() -> None:
@@ -51,9 +30,16 @@ def main() -> None:
         START_POSE.heading or 0.0,
     )
 
-    response = _post_json(
-        f"http://{container.ip_address}:9091/valet_parking",
-        {"parking_spot_id": PARKING_SPOT_ID},
+    sender = CommandSender(
+        None,
+        version=container.version,
+        external_command_service_url=f"http://{container.ip_address}:9091",
+    )
+    response = sender.send_parking(
+        ParkingCommand(
+            initial_pose=START_POSE,
+            parking_space_id=PARKING_SPOT_ID,
+        )
     )
     print(response)
     print(

@@ -50,6 +50,13 @@ class ParkingCommand:
 
 
 @dataclass(frozen=True)
+class ActionCommand:
+    """Request a driving action such as pulling over or stopping."""
+
+    command: str
+
+
+@dataclass(frozen=True)
 class Publication:
     """One serialized-message publication produced for a command."""
 
@@ -70,4 +77,8 @@ class CommandEncoder(Protocol):
         self, command: ParkingCommand, map_service: Any
     ) -> tuple[Publication, ...]:
         """Compile a parking command using loaded HD-map metadata."""
+        ...
+
+    def encode_action(self, command: ActionCommand) -> tuple[Publication, ...]:
+        """Compile an action command."""
         ...

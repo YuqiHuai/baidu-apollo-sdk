@@ -33,7 +33,7 @@ def main() -> None:
     sender = CommandSender(
         None,
         version=container.version,
-        lane_follow_service_url=f"http://{container.ip_address}:9091",
+        external_command_service_url=f"http://{container.ip_address}:9091",
     )
     response = sender.send_lane_follow(
         LaneFollowCommand(

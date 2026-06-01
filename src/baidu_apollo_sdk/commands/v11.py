@@ -2,10 +2,7 @@
 
 from typing import Any
 
-from baidu_apollo_proto.v11.modules.common_msgs.routing_msgs import routing_pb2
-
-from .base import LaneFollowCommand, ParkingCommand, Publication
-from .routing import encode_parking_request
+from .base import ActionCommand, LaneFollowCommand, ParkingCommand, Publication
 
 
 class CommandEncoderV11:
@@ -22,12 +19,11 @@ class CommandEncoderV11:
     def encode_parking(
         self, command: ParkingCommand, map_service: Any
     ) -> tuple[Publication, ...]:
-        """Encode a request for Apollo v11's old-routing adapter."""
-        return (
-            encode_parking_request(
-                command,
-                map_service,
-                routing_pb2.RoutingRequest,
-                set_start_pose_flag=True,
-            ).publication,
+        """Apollo v11 parking commands are sent through the HTTP bridge."""
+        raise RuntimeError(
+            "Apollo v11 parking is sent through the HTTP bridge"
         )
+
+    def encode_action(self, command: ActionCommand) -> tuple[Publication, ...]:
+        """Apollo v11 action commands are sent through the HTTP bridge."""
+        raise RuntimeError("Apollo v11 action is sent through the HTTP bridge")

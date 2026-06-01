@@ -14,6 +14,7 @@ from baidu_apollo_proto.v11.modules.common_msgs.routing_msgs import routing_pb2
 from shapely.geometry import Point
 
 from baidu_apollo_sdk.commands import (
+    ActionCommand,
     CommandSender,
     Header,
     LaneFollowCommand,
@@ -23,6 +24,27 @@ from baidu_apollo_sdk.commands import (
 )
 from baidu_apollo_sdk.cyber_rt.channel import Topic
 from baidu_apollo_sdk.map_service import ParkingSpaceExtraInfo
+
+
+class FakeHttpResponse:
+    """Return a fixed body from a mocked HTTP request."""
+
+    def __init__(self, body: bytes) -> None:
+        self.body = body
+
+    def __enter__(self) -> "FakeHttpResponse":
+        return self
+
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc: BaseException | None,
+        tb: Any,
+    ) -> None:
+        return None
+
+    def read(self) -> bytes:
+        return self.body
 
 
 class FakeCyberClient:
@@ -75,24 +97,9 @@ def test_v11_lane_follow_uses_external_command_request(
 ) -> None:
     requests: list[Any] = []
 
-    class FakeResponse:
-        def __enter__(self) -> "FakeResponse":
-            return self
-
-        def __exit__(
-            self,
-            exc_type: type[BaseException] | None,
-            exc: BaseException | None,
-            tb: Any,
-        ) -> None:
-            return None
-
-        def read(self) -> bytes:
-            return b'{"accepted": true, "request_id": "abc-123"}'
-
-    def fake_urlopen(request: Any) -> FakeResponse:
+    def fake_urlopen(request: Any) -> FakeHttpResponse:
         requests.append(request)
-        return FakeResponse()
+        return FakeHttpResponse(b'{"accepted": true, "request_id": "abc-123"}')
 
     monkeypatch.setattr(
         "baidu_apollo_sdk.commands.sender.urlopen",
@@ -101,7 +108,7 @@ def test_v11_lane_follow_uses_external_command_request(
     sender = CommandSender(
         None,
         version=11,
-        lane_follow_service_url="http://10.0.0.9:9091",
+        external_command_service_url="http://10.0.0.9:9091",
     )
     response = sender.send_lane_follow(
         LaneFollowCommand(
@@ -151,7 +158,7 @@ def test_v11_lane_follow_returns_http_error_body(
     sender = CommandSender(
         None,
         version=11,
-        lane_follow_service_url="http://10.0.0.9:9091",
+        external_command_service_url="http://10.0.0.9:9091",
     )
     response = sender.send_lane_follow(
         LaneFollowCommand(
@@ -164,58 +171,75 @@ def test_v11_lane_follow_returns_http_error_body(
     assert response == {"ok": False, "error": "no response"}
 
 
-def test_v11_parking_command_encodes_derived_routing_metadata() -> None:
-    client = FakeCyberClient()
+def test_v11_parking_command_uses_valet_parking_service(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    requests: list[Any] = []
+
+    def fake_urlopen(request: Any) -> FakeHttpResponse:
+        requests.append(request)
+        return FakeHttpResponse(b'{"ok": true}')
+
+    monkeypatch.setattr(
+        "baidu_apollo_sdk.commands.sender.urlopen",
+        fake_urlopen,
+    )
     sender = CommandSender(
-        client,
-        map_service=FakeMapService(),
+        None,
+        version=11,
+        external_command_service_url="http://10.0.0.9:9091",
     )
 
-    sender.send_parking(
+    response = sender.send_parking(
         ParkingCommand(
             initial_pose=Pose(1.0, 2.0, 0.1),
             parking_space_id="parking-1",
-            header=Header(123.5, "test", 8),
         )
     )
 
-    assert len(client.publications) == 1
-    _, raw = client.publications[0]
-    request = routing_pb2.RoutingRequest()
-    request.ParseFromString(raw)
-
-    assert request.is_start_pose_set
-    assert request.header.timestamp_sec == 123.5
-    assert request.header.module_name == "test"
-    assert request.header.sequence_num == 8
-    assert [(point.pose.x, point.pose.y) for point in request.waypoint] == [
-        (1.0, 2.0),
-        (10.0, 11.0),
-    ]
-    assert request.waypoint[0].heading == 0.1
-    assert not request.waypoint[1].HasField("id")
-    assert request.parking_info.parking_space_id == "parking-1"
-    assert request.parking_info.parking_space_type == 0
-    assert (
-        request.parking_info.parking_point.x,
-        request.parking_info.parking_point.y,
-        request.parking_info.parking_point.z,
-    ) == (2.0, 1.0, 0.2)
-    assert [
-        (point.x, point.y, point.z)
-        for point in request.parking_info.corner_point.point
-    ] == [
-        (0.0, 0.0, 0.0),
-        (4.0, 0.0, 0.0),
-        (4.0, 2.0, 0.4),
-        (0.0, 2.0, 0.4),
-    ]
+    assert len(requests) == 1
+    request = requests[0]
+    assert request.full_url == "http://10.0.0.9:9091/valet_parking"
+    assert json.loads(request.data.decode("utf-8")) == {
+        "parking_spot_id": "parking-1"
+    }
+    assert response == {"ok": True}
 
 
-def test_v11_lane_follow_requires_service_url() -> None:
+def test_v11_action_command_uses_action_service(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    requests: list[Any] = []
+
+    def fake_urlopen(request: Any) -> FakeHttpResponse:
+        requests.append(request)
+        return FakeHttpResponse(b'{"ok": true}')
+
+    monkeypatch.setattr(
+        "baidu_apollo_sdk.commands.sender.urlopen",
+        fake_urlopen,
+    )
+    sender = CommandSender(
+        None,
+        version=11,
+        external_command_service_url="http://10.0.0.9:9091",
+    )
+
+    response = sender.send_action(ActionCommand(command="PULL_OVER"))
+
+    assert len(requests) == 1
+    request = requests[0]
+    assert request.full_url == "http://10.0.0.9:9091/action"
+    assert json.loads(request.data.decode("utf-8")) == {
+        "command": "PULL_OVER"
+    }
+    assert response == {"ok": True}
+
+
+def test_v11_commands_require_service_url() -> None:
     sender = CommandSender(None, version=11)
 
-    with pytest.raises(RuntimeError, match="lane_follow_service_url"):
+    with pytest.raises(RuntimeError, match="external_command_service_url"):
         sender.send_lane_follow(
             LaneFollowCommand(
                 start_pose=Pose(1.0, 2.0, 0.1),
@@ -224,11 +248,58 @@ def test_v11_lane_follow_requires_service_url() -> None:
         )
 
 
-def test_parking_command_requires_map_service() -> None:
-    sender = CommandSender(FakeCyberClient())
+def test_v7_parking_command_requires_map_service_in_fresh_process() -> None:
+    script = """
+from baidu_apollo_sdk.commands import CommandSender, ParkingCommand, Pose
 
-    with pytest.raises(RuntimeError, match="require a map service"):
-        sender.send_parking(ParkingCommand(Pose(1.0, 2.0), "parking-1"))
+class FakeClient:
+    def publish(self, topic, message):
+        pass
+
+try:
+    CommandSender(FakeClient(), version=7).send_parking(
+        ParkingCommand(Pose(1.0, 2.0), "parking-1")
+    )
+except RuntimeError as exc:
+    print(exc)
+"""
+
+    result = subprocess.run(
+        [sys.executable, "-c", script],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.stdout.strip() == "Parking commands require a map service"
+
+
+def test_v7_action_command_reports_not_implemented_in_fresh_process() -> None:
+    script = """
+from baidu_apollo_sdk.commands import ActionCommand, CommandSender
+
+class FakeClient:
+    def publish(self, topic, message):
+        pass
+
+try:
+    CommandSender(FakeClient(), version=7).send_action(
+        ActionCommand(command="PULL_OVER")
+    )
+except RuntimeError as exc:
+    print(exc)
+"""
+
+    result = subprocess.run(
+        [sys.executable, "-c", script],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.stdout.strip() == (
+        "Apollo v7 action commands are not implemented"
+    )
 
 
 def test_sender_waits_between_multi_message_publications(

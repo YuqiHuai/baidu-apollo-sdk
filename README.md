@@ -134,7 +134,7 @@ from baidu_apollo_sdk.commands import CommandSender, LaneFollowCommand, Pose
 sender = CommandSender(
     None,
     version=11,
-    lane_follow_service_url=f"http://{container.ip_address}:9091",
+    external_command_service_url=f"http://{container.ip_address}:9091",
 )
 response = sender.send_lane_follow(
     LaneFollowCommand(
@@ -146,9 +146,23 @@ response = sender.send_lane_follow(
 print(response)
 ```
 
-Parking commands additionally need a loaded map service. The sender resolves
-the parking polygon, derives the routing endpoint, and publishes the polygon
-center and corners. Apollo v7 parking commands publish
+Apollo v11 maps parking commands to the HTTP bridge's `/valet_parking`
+service:
+
+```python
+from baidu_apollo_sdk.commands import ParkingCommand
+
+response = sender.send_parking(
+    ParkingCommand(
+        initial_pose=Pose(x=587178.0, y=4141425.0),
+        parking_space_id="11545",
+    )
+)
+```
+
+Apollo v7 parking commands additionally need a loaded map service. The sender
+resolves the parking polygon, derives the routing endpoint, and publishes the
+polygon center and corners. Apollo v7 parking commands publish
 `/apollo/routing_request`, wait briefly, then publish `/apollo/task_manager`.
 The task-manager message also embeds the derived routing request:
 
@@ -168,11 +182,17 @@ sender.send_parking(
 )
 ```
 
-Apollo v7 consumes the routing request directly. Apollo v11 lane follow uses
-the custom HTTP bridge on the Apollo container IP at port `9091`, while
-parking still uses the `external_command_with_old_routing.launch`
-compatibility adapter because cyber-bridge publishes messages but does not
-invoke Cyber service endpoints.
+Apollo v11 action commands also use the HTTP bridge:
+
+```python
+from baidu_apollo_sdk.commands import ActionCommand
+
+response = sender.send_action(ActionCommand(command="PULL_OVER"))
+```
+
+Apollo v7 consumes routing requests directly. Apollo v11 lane follow, valet
+parking, and action commands use the custom HTTP bridge on the Apollo
+container IP at port `9091`.
 
 With cyber-bridge already running in `apollo_dev_yuqi`, send the Apollo v7
 live-test requests with:

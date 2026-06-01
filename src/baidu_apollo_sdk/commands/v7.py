@@ -11,7 +11,7 @@ from google.protobuf.message import Message
 from baidu_apollo_sdk.cyber_rt.channel import Topic
 from baidu_apollo_sdk.cyber_rt.decoder import decode_proto
 
-from .base import LaneFollowCommand, ParkingCommand, Publication
+from .base import ActionCommand, LaneFollowCommand, ParkingCommand, Publication
 from .routing import (
     _set_header,
     encode_parking_request,
@@ -71,3 +71,7 @@ class CommandEncoderV7:
             encoded.publication,
             Publication(topic=_task_manager_topic(), message=task),
         )
+
+    def encode_action(self, command: ActionCommand) -> tuple[Publication, ...]:
+        """Report that Apollo v7 action commands are not implemented yet."""
+        raise RuntimeError("Apollo v7 action commands are not implemented")

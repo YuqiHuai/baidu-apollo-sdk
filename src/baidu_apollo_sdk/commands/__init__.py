@@ -1,9 +1,17 @@
-"""Semantic Apollo commands compiled into CyberRT publications."""
+"""Version-aware semantic Apollo commands."""
 
-from .base import Header, LaneFollowCommand, ParkingCommand, Pose, Publication
+from .base import (
+    ActionCommand,
+    Header,
+    LaneFollowCommand,
+    ParkingCommand,
+    Pose,
+    Publication,
+)
 from .sender import CommandSender
 
 __all__ = [
+    "ActionCommand",
     "CommandSender",
     "Header",
     "LaneFollowCommand",
