@@ -178,7 +178,9 @@ With cyber-bridge already running in `apollo_dev_yuqi`, send the Apollo v7
 live-test requests with:
 
 ```bash
-uv run python examples/test_send_v7_routing_request.py
-uv run python examples/test_send_v7_parking_request.py
-uv run python examples/test_send_v11_lane_follow_request.py
+uv run python examples/v7/test_send_v7_routing_request.py
+uv run python examples/v7/test_send_v7_parking_request.py
+uv run python examples/v11/test_send_v11_lane_follow_request.py
+uv run python examples/v11/test_send_v11_action_request.py
+uv run python examples/v11/test_send_v11_parking_request.py
 ```
