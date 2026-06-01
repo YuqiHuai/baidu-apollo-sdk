@@ -161,7 +161,8 @@ sender.send_parking(
 )
 ```
 
-Apollo v7 consumes the routing request directly. Apollo v11 requires its
+Apollo v7 consumes the routing request directly. Apollo v11 lane follow uses
+`/apollo/external_command/lane_follow`, while parking still uses the
 `external_command_with_old_routing.launch` compatibility adapter because
 cyber-bridge publishes messages but does not invoke Cyber service endpoints.
 
@@ -171,4 +172,5 @@ live-test requests with:
 ```bash
 uv run python examples/test_send_v7_routing_request.py
 uv run python examples/test_send_v7_parking_request.py
+uv run python examples/test_send_v11_lane_follow_request.py
 ```

@@ -7,6 +7,9 @@ from types import SimpleNamespace
 from typing import Any
 
 import pytest
+from baidu_apollo_proto.v11.modules.common_msgs.external_command_msgs import (
+    lane_follow_command_pb2,
+)
 from baidu_apollo_proto.v11.modules.common_msgs.routing_msgs import routing_pb2
 from shapely.geometry import Point
 
@@ -67,7 +70,7 @@ class FakeMapService:
         )
 
 
-def test_v11_lane_follow_uses_old_routing_adapter_request() -> None:
+def test_v11_lane_follow_uses_external_command_request() -> None:
     client = FakeCyberClient()
     sender = CommandSender(client)
 
@@ -82,27 +85,28 @@ def test_v11_lane_follow_uses_old_routing_adapter_request() -> None:
 
     assert len(client.publications) == 1
     topic, raw = client.publications[0]
-    request = routing_pb2.RoutingRequest()
+    request = lane_follow_command_pb2.LaneFollowCommand()
     request.ParseFromString(raw)
 
-    assert topic.channel == "/apollo/routing_request"
-    assert topic.msg_type == "apollo.routing.RoutingRequest"
+    assert topic.channel == "/apollo/external_command/lane_follow"
+    assert topic.msg_type == "apollo.external_command.LaneFollowCommand"
     assert topic.proto_descriptor is not None
     assert topic.proto_descriptor.name == (
-        "modules/common_msgs/routing_msgs/routing.proto"
+        "modules/common_msgs/external_command_msgs/lane_follow_command.proto"
     )
     assert request.is_start_pose_set
     assert request.header.timestamp_sec == 123.5
     assert request.header.module_name == "test"
     assert request.header.sequence_num == 7
-    assert [(point.pose.x, point.pose.y) for point in request.waypoint] == [
+    assert [(point.x, point.y) for point in request.way_point] == [
         (1.0, 2.0),
         (3.0, 4.0),
-        (5.0, 6.0),
     ]
-    assert request.waypoint[0].heading == 0.1
-    assert not request.waypoint[1].HasField("heading")
-    assert request.waypoint[2].heading == 0.2
+    assert request.way_point[0].heading == 0.1
+    assert not request.way_point[1].HasField("heading")
+    assert request.end_pose.x == 5.0
+    assert request.end_pose.y == 6.0
+    assert request.end_pose.heading == 0.2
 
 
 def test_v11_parking_command_encodes_derived_routing_metadata() -> None:
