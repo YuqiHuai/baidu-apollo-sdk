@@ -13,6 +13,8 @@ from baidu_apollo_sdk.dreamview import (
     DreamviewModes,
     DreamviewOperations,
 )
+from baidu_apollo_sdk.dreamview.v7 import DreamviewV7
+from baidu_apollo_sdk.dreamview.v11 import DreamviewV11
 
 
 class FakeDreamviewContainer:
@@ -63,6 +65,16 @@ class FakeDreamviewV7Container(FakeDreamviewContainer):
     version = 7
 
 
+def test_dreamview_factory_selects_protocol_implementation() -> None:
+    dreamview_v11 = Dreamview(FakeDreamviewContainer())
+    dreamview_v7 = Dreamview(FakeDreamviewV7Container())
+
+    assert isinstance(dreamview_v11, Dreamview)
+    assert isinstance(dreamview_v11, DreamviewV11)
+    assert isinstance(dreamview_v7, Dreamview)
+    assert isinstance(dreamview_v7, DreamviewV7)
+
+
 def test_dreamview_connect_wraps_connection_failure(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -71,7 +83,7 @@ def test_dreamview_connect_wraps_connection_failure(
         raise OSError("unreachable")
 
     monkeypatch.setattr(
-        "baidu_apollo_sdk.dreamview.create_connection",
+        "baidu_apollo_sdk.dreamview.base.create_connection",
         create_failing_connection,
     )
 
@@ -97,7 +109,7 @@ def test_dreamview_reconnects_and_retries_send(
         return sockets.pop(0)
 
     monkeypatch.setattr(
-        "baidu_apollo_sdk.dreamview.create_connection",
+        "baidu_apollo_sdk.dreamview.base.create_connection",
         create_fake_connection,
     )
 
@@ -140,7 +152,7 @@ def test_dreamview_reconnects_and_replays_request_after_recv_loss(
 
     second_socket.recv_items.append(recv_success_response)
     monkeypatch.setattr(
-        "baidu_apollo_sdk.dreamview.create_connection",
+        "baidu_apollo_sdk.dreamview.base.create_connection",
         create_fake_connection,
     )
 
@@ -168,7 +180,7 @@ def test_dreamview_can_disable_auto_reconnect(
         return socket
 
     monkeypatch.setattr(
-        "baidu_apollo_sdk.dreamview.create_connection",
+        "baidu_apollo_sdk.dreamview.base.create_connection",
         create_fake_connection,
     )
 

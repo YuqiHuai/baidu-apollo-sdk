@@ -4,6 +4,12 @@ from .apollo_container import ApolloContainer
 from .apollo_repo import ApolloRepo
 from .apollo_runtime import ApolloRuntime
 from .dreamview import Dreamview, DreamviewConnectionError
+from .map_service import (
+    MapService,
+    ParkingSpaceExtraInfo,
+    list_hd_maps,
+    load_map_service,
+)
 
 __all__ = [
     "ApolloContainer",
@@ -11,4 +17,8 @@ __all__ = [
     "ApolloRuntime",
     "Dreamview",
     "DreamviewConnectionError",
+    "MapService",
+    "ParkingSpaceExtraInfo",
+    "list_hd_maps",
+    "load_map_service",
 ]

@@ -10,12 +10,10 @@ from typing import Any, Protocol, cast
 
 from google.protobuf.message import Message
 
-from baidu_apollo_sdk.version import ApolloVersion, validate_apollo_version
+from baidu_apollo_sdk.proto_version import claim_proto_version
 
 from .channel import Topic
 from .decoder import decode_proto
-
-_loaded_version: ApolloVersion | None = None
 
 
 class TopicNamespace(Protocol):
@@ -152,15 +150,7 @@ def get_topics(version: int = 11) -> type[TopicNamespace]:
     generated modules together can conflict in protobuf's global descriptor
     pool.
     """
-    global _loaded_version  # pylint: disable=global-statement
-
-    apollo_version: ApolloVersion = validate_apollo_version(version)
-    if _loaded_version is not None and _loaded_version != apollo_version:
-        raise RuntimeError(
-            "Apollo protobuf versions cannot be mixed in one process: "
-            f"v{_loaded_version} is already loaded, requested v{apollo_version}"
-        )
-    _loaded_version = apollo_version
+    apollo_version = claim_proto_version(version)
     if apollo_version == 7:
         return _build_topics_v7()
     return _build_topics_v11()

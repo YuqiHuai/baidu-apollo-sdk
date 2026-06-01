@@ -1,46 +1,33 @@
-import time
+from baidu_apollo_proto.v7.modules.map.proto.map_pb2 import Map
+from pathlib import Path
 
-from baidu_apollo_sdk.apollo_container import ApolloContainer
-from baidu_apollo_sdk.apollo_repo import ApolloRepo
-from baidu_apollo_sdk.apollo_runtime import ApolloRuntime
-from baidu_apollo_sdk.cyber_rt.bridge import CyberBridge
-from baidu_apollo_sdk.cyber_rt.client import CyberClient
-from baidu_apollo_sdk.cyber_rt.topics import Topics
+map_root = Path("/home/yuqi/ResearchWorkspace/CADRI/approaches/DoppelTest/data/maps")
+map = Map()
 
-repo = ApolloRepo.from_config()
+for map_name in map_root.iterdir():
+    if map_name.is_file():
+        continue
+    if map_name.name != 'sunnyvale_with_two_offices':
+        continue
+    map_bin = map_name / "base_map.bin"
+    assert map_bin.exists(), f"{map_bin} does not exist"
 
-repo.clone(True)
+    print(f"Parsing map from {map_bin}")
 
-ctn = ApolloContainer("yuqi", repo.get_path())
-run_time = ApolloRuntime(ctn)
-# run_time.ensure_container(False)
+    with open(map_bin, 'rb') as f:
+        map.ParseFromString(f.read())
 
-run_time.start_bridge()
+        parking_spaces = map.parking_space
+        print(f"Number of parking spaces: {len(parking_spaces)}")
 
-run_time.wait_for_node('bridge', 0.5)
+        for parking_space in parking_spaces:
+            print('=' * 20)
+            print(parking_space)
 
-cyber_bridge = CyberBridge(ctn)
+        for lane in map.lane:
+            if lane.id.id == "11565dup1_1_-1":
+                print('=' * 20)
+                print(lane)
 
-bridge_client = CyberClient(cyber_bridge)
-
-
-current_time = time.perf_counter()
-latest_loc = bridge_client.subscribe_latest(topic=Topics.LocalizationTopic)
-bridge_client.start()
-print("Subscribed to localization topic, waiting for messages...")
-while True:
-    if time.perf_counter() - current_time > 5:
-        print("Exiting")
-        break
-    raw = latest_loc.get(block=False)
-    if raw is not None:
-        loc = Topics.LocalizationTopic.decoder(raw)
-        print(
-            "Received localization message: "
-            f"position=({loc.pose.position.x}, "
-            f"{loc.pose.position.y}, "
-            f"{loc.pose.position.z}), "
-            f"timestamp={loc.header.timestamp_sec}"
-        )
-
-bridge_client.stop()
+# with open('map.bin', 'rb') as f:
+    # map.ParseFromString(f.read())
