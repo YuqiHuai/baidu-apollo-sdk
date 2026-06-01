@@ -2,6 +2,7 @@
 
 import queue
 import threading
+import time
 from collections import defaultdict
 from collections.abc import Callable, Iterator
 from typing import Any
@@ -68,13 +69,21 @@ class CyberClient:
     - MANY local consumers
     """
 
-    def __init__(self, bridge: CyberBridge) -> None:
+    def __init__(
+        self,
+        bridge: CyberBridge,
+        *,
+        publisher_registration_delay: float = 1.0,
+    ) -> None:
         """Initialize a client around an active cyber-bridge connection.
 
         Args:
             bridge: Low-level bridge connection used for socket I/O.
+            publisher_registration_delay: Seconds to wait after registering a
+                new writer so existing CyberRT readers can discover it.
         """
         self.bridge = bridge
+        self.publisher_registration_delay = publisher_registration_delay
 
         # channel -> list of callbacks
         self._callbacks: dict[str, list[Callable[[bytes], None]]] = defaultdict(
@@ -121,6 +130,7 @@ class CyberClient:
         if ch not in self._publishers:
             self.bridge.add_publisher(topic)
             self._publishers.add(ch)
+            time.sleep(self.publisher_registration_delay)
 
         logger.debug(
             "{} publish {}",

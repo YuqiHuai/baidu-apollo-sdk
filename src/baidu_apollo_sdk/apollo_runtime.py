@@ -55,9 +55,10 @@ class ApolloRuntime:
                     Default is False.
         """
         logger.info("{} bootstrap", container_log_prefix(self.container))
-        self.container.exec_command(
-            "bash scripts/bootstrap.sh start_plus", stream=stream
-        )
+        if self.container.version == 7:
+            self.start_dreamview(stream=stream)
+        else:
+            self.start_dreamview_plus(stream=stream)
 
     def start_dreamview(self, stream: bool = False) -> None:
         """Start Dreamview in the container.
@@ -67,7 +68,20 @@ class ApolloRuntime:
         """
         logger.info("{} start dreamview", container_log_prefix(self.container))
         self.container.exec_command(
-            "bash scripts/bootstrap.sh start_dreamview", stream=stream
+            "bash scripts/bootstrap.sh start", stream=stream
+        )
+
+    def start_dreamview_plus(self, stream: bool = False) -> None:
+        """Start Dreamview Plus in the container.
+
+        Args:
+            stream: Whether to stream command output.
+        """
+        logger.info(
+            "{} start dreamview plus", container_log_prefix(self.container)
+        )
+        self.container.exec_command(
+            "bash scripts/bootstrap.sh start_plus", stream=stream
         )
 
     def start_bridge(self) -> None:

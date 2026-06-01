@@ -122,3 +122,53 @@ uv run python examples/run_dreamview_scenario.py
 The Dreamview scenario starts the development container, configures the
 `borregas_ave` map, starts planning, records a short route, and prints the
 Dreamview URL.
+
+## Commands
+
+Send a lane-follow command through cyber-bridge:
+
+```python
+from baidu_apollo_sdk.commands import CommandSender, LaneFollowCommand, Pose
+
+sender = CommandSender(bridge_client, version=container.version)
+sender.send_lane_follow(
+    LaneFollowCommand(
+        start_pose=Pose(x=587202.0, y=4141420.0, heading=0.0),
+        end_pose=Pose(x=587223.0, y=4141416.0),
+    )
+)
+```
+
+Parking commands additionally need a loaded map service. The sender resolves
+the parking polygon, derives the routing endpoint, and publishes the polygon
+center and corners. Apollo v7 parking commands publish
+`/apollo/routing_request`, wait briefly, then publish `/apollo/task_manager`.
+The task-manager message also embeds the derived routing request:
+
+```python
+from baidu_apollo_sdk.commands import ParkingCommand
+
+sender = CommandSender(
+    bridge_client,
+    version=container.version,
+    map_service=map_service,
+)
+sender.send_parking(
+    ParkingCommand(
+        initial_pose=Pose(x=587178.0, y=4141425.0),
+        parking_space_id="11545",
+    )
+)
+```
+
+Apollo v7 consumes the routing request directly. Apollo v11 requires its
+`external_command_with_old_routing.launch` compatibility adapter because
+cyber-bridge publishes messages but does not invoke Cyber service endpoints.
+
+With cyber-bridge already running in `apollo_dev_yuqi`, send the Apollo v7
+live-test requests with:
+
+```bash
+uv run python examples/test_send_v7_routing_request.py
+uv run python examples/test_send_v7_parking_request.py
+```

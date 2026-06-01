@@ -18,7 +18,8 @@ class CommandCall:
 
 
 class FakeContainer:
-    def __init__(self) -> None:
+    def __init__(self, version: int = 11) -> None:
+        self.version = version
         self.running = True
         self.started = False
         self.commands: list[CommandCall] = []
@@ -89,6 +90,26 @@ def test_build_runs_apollo_build_command() -> None:
 
     assert container.commands == [
         CommandCall("bash apollo.sh build", stream=True),
+    ]
+
+
+def test_bootstrap_starts_dreamview_for_v7() -> None:
+    container = FakeContainer(version=7)
+
+    runtime_for(container).bootstrap(stream=True)
+
+    assert container.commands == [
+        CommandCall("bash scripts/bootstrap.sh start", stream=True),
+    ]
+
+
+def test_bootstrap_starts_dreamview_plus_for_v11() -> None:
+    container = FakeContainer(version=11)
+
+    runtime_for(container).bootstrap(stream=True)
+
+    assert container.commands == [
+        CommandCall("bash scripts/bootstrap.sh start_plus", stream=True),
     ]
 
 
