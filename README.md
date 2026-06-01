@@ -62,6 +62,19 @@ integration tests are skipped instead of failing.
 
 ## CyberRT examples
 
+Apollo v11 remains the default. For an Apollo v7 container, select matching
+protobuf topics before publishing or subscribing:
+
+```python
+from baidu_apollo_sdk.cyber_rt.topics import get_topics
+
+topics = get_topics(container.version)
+latest_loc = bridge_client.subscribe_latest(topic=topics.LocalizationTopic)
+```
+
+Use one Apollo protobuf version per Python process. The generated v7 and v11
+schemas contain overlapping descriptors and cannot be loaded together.
+
 Subscribe to the latest localization message and decode the raw CyberRT bytes
 with the topic decoder:
 

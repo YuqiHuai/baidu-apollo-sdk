@@ -10,6 +10,7 @@ from typing import cast
 import docker
 
 from baidu_apollo_sdk.logging import container_log_prefix, get_logger
+from baidu_apollo_sdk.version import ApolloVersion, validate_apollo_version
 
 logger = get_logger()
 
@@ -25,16 +26,20 @@ class ApolloContainer:
 
     DEV_CONTAINER_PREFIX = "apollo_dev_"
 
-    def __init__(self, instance_name: str, apollo_path: str):
+    def __init__(
+        self, instance_name: str, apollo_path: str | Path, version: int = 11
+    ) -> None:
         """Initialize a container wrapper.
 
         Args:
             name: Short container name. The runtime name is prefixed with
                 `apollo_dev_`.
             apollo_path: Host path to the Apollo source checkout.
+            version: The Apollo version to use.
         """
         self.instance_name = instance_name
         self.apollo_path = apollo_path
+        self.version: ApolloVersion = validate_apollo_version(version)
         self.docker_client = docker.from_env()
 
     def start(self, verbose: bool = False) -> None:
@@ -48,7 +53,9 @@ class ApolloContainer:
                 unset, or the container does not start successfully.
         """
         logger.info("{} start container", container_log_prefix(self))
-        script_path = files("baidu_apollo_sdk.scripts") / "dev_start.sh"
+        script_path = (
+            files("baidu_apollo_sdk.scripts") / f"v{self.version}_dev_start.sh"
+        )
 
         if not script_path.is_file():
             raise RuntimeError(f"Script not found: {script_path}")

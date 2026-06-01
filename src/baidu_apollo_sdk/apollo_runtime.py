@@ -82,18 +82,22 @@ class ApolloRuntime:
         logger.info("{} start bridge", container_log_prefix(self.container))
         self.container.exec_command("bash scripts/bridge.sh", detach=True)
 
-    def ensure_container(self, restart: bool = False) -> None:
+    def ensure_container(
+        self, restart: bool = False, verbose: bool = False
+    ) -> None:
         """Ensure the container is running, and start it if not.
 
         Args:
             restart: If True, restart the container if it is already running.
+                Default is False.
+            verbose: If True, stream the startup script output.
                 Default is False.
         """
         if not self.container.is_running() or restart:
             logger.info(
                 "{} ensure container", container_log_prefix(self.container)
             )
-            self.container.start()
+            self.container.start(verbose=verbose)
 
     def start_recorder(
         self, record_name: str, segment_duration: int = 3600

@@ -12,6 +12,7 @@ from websocket import (
 )
 
 from baidu_apollo_sdk.logging import container_log_prefix, get_logger
+from baidu_apollo_sdk.version import ApolloVersion, validate_apollo_version
 
 logger = get_logger()
 
@@ -47,7 +48,7 @@ class DreamviewVehicles:
 
 
 def get_hmi_action_request_payload(
-    action: str, value: str, request_id: str
+    action: str, value: str, request_id: str, version: int = 11
 ) -> dict[str, Any]:
     """Build a Dreamview HMI action request payload.
 
@@ -55,10 +56,14 @@ def get_hmi_action_request_payload(
         action: Dreamview HMI action name.
         value: Action value to send in the payload.
         request_id: Request identifier used to correlate responses.
+        version: Apollo major version used by the Dreamview server.
 
     Returns:
         JSON-serializable request payload.
     """
+    apollo_version = validate_apollo_version(version)
+    if apollo_version == 7:
+        return {"type": "HMIAction", "action": action, "value": value}
     return {
         "data": {
             "name": "",
@@ -100,9 +105,21 @@ class Dreamview:
         if reconnect_attempts < 0:
             raise ValueError("reconnect_attempts must be non-negative")
         self.ctn = ctn
+        self.version: ApolloVersion = validate_apollo_version(
+            getattr(ctn, "version", 11)
+        )
         self.auto_reconnect = auto_reconnect
         self.reconnect_attempts = reconnect_attempts
         self.socket_client: Any | None = None
+        self._v7_start_point: dict[str, float] | None = None
+
+    def _hmi_action_payload(
+        self, action: str, value: str, request_id: str
+    ) -> dict[str, Any]:
+        """Build an HMI request for the configured Dreamview version."""
+        return get_hmi_action_request_payload(
+            action, value, request_id, version=self.version
+        )
 
     def _log_prefix(self) -> str:
         return container_log_prefix(self.ctn)
@@ -227,9 +244,7 @@ class Dreamview:
         assert mode in DreamviewModes.__dict__.values(), (
             f"Unsupported mode: {mode}"
         )
-        payload = get_hmi_action_request_payload(
-            "CHANGE_MODE", mode, "noResponse"
-        )
+        payload = self._hmi_action_payload("CHANGE_MODE", mode, "noResponse")
         logger.info("{} set mode {}", self._log_prefix(), mode)
         self._send_payload(payload)
 
@@ -240,7 +255,7 @@ class Dreamview:
             module_name: Dreamview module name.
         """
         request_id = nanoid.generate()
-        payload = get_hmi_action_request_payload(
+        payload = self._hmi_action_payload(
             "START_MODULE", module_name, f"HMIAction!{request_id}"
         )
         logger.info("{} start module {}", self._log_prefix(), module_name)
@@ -253,7 +268,7 @@ class Dreamview:
             module_name: Dreamview module name.
         """
         request_id = nanoid.generate()
-        payload = get_hmi_action_request_payload(
+        payload = self._hmi_action_payload(
             "STOP_MODULE", module_name, f"HMIAction!{request_id}"
         )
         logger.info("{} stop module {}", self._log_prefix(), module_name)
@@ -274,17 +289,27 @@ class Dreamview:
         assert operation in DreamviewOperations.__dict__.values(), (
             f"Unsupported operation: {operation}"
         )
+        if self.version == 7:
+            if operation != DreamviewOperations.SIM_CONTROL:
+                raise ValueError(
+                    f"Dreamview operation {operation!r} is not supported "
+                    "by Apollo v7"
+                )
+            self._send_payload({"type": "ToggleSimControl", "enable": True})
+            return True
         request_id = nanoid.generate()
-        payload = get_hmi_action_request_payload(
+        payload = self._hmi_action_payload(
             "CHANGE_OPERATION", operation, f"HMIAction!{request_id}"
         )
         # send the request
         logger.info("{} set operation {}", self._log_prefix(), operation)
         response_json = self._send_and_wait_for_response(
             payload,
-            lambda response: response.get("action") == "response"
-            and response.get("data", {}).get("requestId")
-            == f"HMIAction!{request_id}",
+            lambda response: (
+                response.get("action") == "response"
+                and response.get("data", {}).get("requestId")
+                == f"HMIAction!{request_id}"
+            ),
         )
         # Warn when Dreamview returns a failed operation response.
         if (
@@ -328,7 +353,7 @@ class Dreamview:
             "Mkz Lgsvl 321",
             "Nuscenes 165",
         ]
-        payload = get_hmi_action_request_payload(
+        payload = self._hmi_action_payload(
             "CHANGE_VEHICLE", vehicle, "noResponse"
         )
         logger.info("{} set vehicle {}", self._log_prefix(), vehicle)
@@ -349,6 +374,19 @@ class Dreamview:
         Returns:
             True if Dreamview reports the routing point as legal.
         """
+        if self.version == 7:
+            payload = {
+                "type": "CheckRoutingPoint",
+                "point": {"x": x, "y": y, "heading": heading, "id": 0},
+            }
+            response_json = self._send_and_wait_for_response(
+                payload,
+                lambda response: (
+                    response.get("type") == "RoutingPointCheckResult"
+                ),
+            )
+            return "error" not in response_json
+
         request_id = nanoid.generate()
         payload = {
             "data": {
@@ -379,9 +417,11 @@ class Dreamview:
         )
         response_json = self._send_and_wait_for_response(
             payload,
-            lambda response: response.get("action") == "response"
-            and response.get("data", {}).get("requestId")
-            == f"CheckRoutingPoint!{request_id}",
+            lambda response: (
+                response.get("action") == "response"
+                and response.get("data", {}).get("requestId")
+                == f"CheckRoutingPoint!{request_id}"
+            ),
         )
         # data.info.data.isLegao == 1
         is_legal = bool(
@@ -395,9 +435,7 @@ class Dreamview:
             logger.info("{} route point legal", self._log_prefix())
         if not is_legal:
             message = (
-                response_json.get("data", {})
-                .get("info", {})
-                .get("message", "")
+                response_json.get("data", {}).get("info", {}).get("message", "")
             )
             logger.warning(
                 "{} route point illegal: {}",
@@ -417,6 +455,12 @@ class Dreamview:
         Returns:
             True if Dreamview accepts the start point.
         """
+        if self.version == 7:
+            if not self.check_routing_point(x, y, heading):
+                return False
+            self._v7_start_point = {"x": x, "y": y, "heading": heading}
+            return True
+
         request_id = nanoid.generate()
         payload = {
             "data": {
@@ -457,9 +501,11 @@ class Dreamview:
         )
         response_json = self._send_and_wait_for_response(
             payload,
-            lambda response: response.get("action") == "response"
-            and response.get("data", {}).get("requestId")
-            == f"SetStartPoint!{request_id}",
+            lambda response: (
+                response.get("action") == "response"
+                and response.get("data", {}).get("requestId")
+                == f"SetStartPoint!{request_id}"
+            ),
         )
         # check response.data.code.info == -1 for failure
         if response_json.get("data", {}).get("info", {}).get("code", 0) == -1:
@@ -511,6 +557,25 @@ class Dreamview:
                     waypoint_text,
                 )
                 return False
+        if not waypoints:
+            logger.error("{} route has no waypoints", self._log_prefix())
+            return False
+
+        if self.version == 7:
+            if self._v7_start_point is None:
+                raise RuntimeError(
+                    "Apollo v7 routing requires set_start_point() first"
+                )
+            self._send_payload(
+                {
+                    "type": "SendRoutingRequest",
+                    "start": self._v7_start_point,
+                    "waypoint": waypoints[:-1],
+                    "end": waypoints[-1],
+                }
+            )
+            return True
+
         request_id = nanoid.generate()
         payload = {
             "data": {
@@ -542,9 +607,11 @@ class Dreamview:
         )
         response_json = self._send_and_wait_for_response(
             payload,
-            lambda response: response.get("action") == "response"
-            and response.get("data", {}).get("requestId")
-            == f"SendRoutingRequest!{request_id}",
+            lambda response: (
+                response.get("action") == "response"
+                and response.get("data", {}).get("requestId")
+                == f"SendRoutingRequest!{request_id}"
+            ),
         )
         # check response.data.code.info == -1 for failure
         if response_json.get("data", {}).get("info", {}).get("code", 0) == -1:
@@ -558,7 +625,9 @@ class Dreamview:
 
     def load_dynamic_models(self) -> None:
         """Request Dreamview to load available dynamic models."""
-        payload = get_hmi_action_request_payload(
+        if self.version == 7:
+            raise ValueError("Dynamic models are not supported by Apollo v7")
+        payload = self._hmi_action_payload(
             "LOAD_DYNAMIC_MODELS", "", "noResponse"
         )
         logger.info("{} load dynamic models", self._log_prefix())
@@ -566,7 +635,9 @@ class Dreamview:
 
     def change_dynamic_model(self) -> None:
         """Switch Dreamview to the Simulation Perfect Control dynamic model."""
-        payload = get_hmi_action_request_payload(
+        if self.version == 7:
+            raise ValueError("Dynamic models are not supported by Apollo v7")
+        payload = self._hmi_action_payload(
             "CHANGE_DYNAMIC_MODEL", "Simulation Perfect Control", "noResponse"
         )
         logger.info(
@@ -583,6 +654,8 @@ class Dreamview:
         """
         self.set_mode(DreamviewModes.PNC)
         self.set_operation(DreamviewOperations.SIM_CONTROL)
+        if self.version == 7:
+            return self.set_vehicle(DreamviewVehicles.MKZ_EXAMPLE)
         self.load_dynamic_models()
         self.change_dynamic_model()
         return self.set_vehicle(DreamviewVehicles.MKZ_EXAMPLE)

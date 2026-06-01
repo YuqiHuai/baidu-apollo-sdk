@@ -29,7 +29,7 @@ class FakeContainer:
     def is_running(self) -> bool:
         return self.running
 
-    def start(self) -> None:
+    def start(self, verbose: bool = False) -> None:
         self.started = True
         self.running = True
 

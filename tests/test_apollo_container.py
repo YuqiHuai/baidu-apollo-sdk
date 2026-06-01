@@ -91,13 +91,14 @@ class FakeDockerClient:
 def apollo_container(
     monkeypatch: pytest.MonkeyPatch,
     docker_container: FakeDockerContainer | None = None,
+    version: int = 11,
 ) -> ApolloContainer:
     fake_client = FakeDockerClient(docker_container or FakeDockerContainer())
     monkeypatch.setattr(
         "baidu_apollo_sdk.apollo_container.docker.from_env",
         lambda: fake_client,
     )
-    return ApolloContainer("yuqi", "/apollo/root")
+    return ApolloContainer("yuqi", "/apollo/root", version=version)
 
 
 def test_container_name_adds_dev_prefix(
@@ -106,6 +107,13 @@ def test_container_name_adds_dev_prefix(
     container = apollo_container(monkeypatch)
 
     assert container.container_name == "apollo_dev_yuqi"
+
+
+def test_container_rejects_unsupported_apollo_version(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    with pytest.raises(ValueError, match="Unsupported Apollo version"):
+        apollo_container(monkeypatch, version=10)
 
 
 def test_is_running_returns_true_for_running_container(
@@ -272,7 +280,7 @@ def test_remove_file_runs_rm_command(monkeypatch: pytest.MonkeyPatch) -> None:
     assert "rm -f /apollo/file.txt" in docker_container.exec_calls[0].command
 
 
-def test_remove_directory_streams_rm_command(
+def test_remove_directory_runs_rm_command_without_streaming(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     docker_container = FakeDockerContainer()
@@ -282,7 +290,7 @@ def test_remove_directory_streams_rm_command(
     container.remove_directory("/apollo/tmp")
 
     assert "rm -rf /apollo/tmp" in docker_container.exec_calls[0].command
-    assert docker_container.exec_calls[0].stream is True
+    assert docker_container.exec_calls[0].stream is False
 
 
 def test_copy_file_to_container_runs_docker_cp(
@@ -351,7 +359,7 @@ def test_start_runs_packaged_dev_start_script(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
-    script_path = tmp_path / "dev_start.sh"
+    script_path = tmp_path / "v11_dev_start.sh"
     script_path.write_text("#!/usr/bin/env bash\n", encoding="utf-8")
     docker_container = FakeDockerContainer(status="running")
     container = apollo_container(monkeypatch, docker_container)
@@ -392,6 +400,39 @@ def test_start_runs_packaged_dev_start_script(
     ]
 
 
+def test_start_selects_v7_dev_start_script(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    script_path = tmp_path / "v7_dev_start.sh"
+    script_path.write_text("#!/usr/bin/env bash\n", encoding="utf-8")
+    container = apollo_container(monkeypatch, version=7)
+    calls: list[str] = []
+
+    def fake_run(
+        cmd: str,
+        env: dict[str, str],
+        shell: bool,
+        capture_output: bool,
+        check: bool,
+    ) -> subprocess.CompletedProcess[str]:
+        calls.append(cmd)
+        return subprocess.CompletedProcess(cmd, 0, "", "")
+
+    monkeypatch.setattr(
+        "baidu_apollo_sdk.apollo_container.files",
+        lambda package: tmp_path,
+    )
+    monkeypatch.setattr(
+        "baidu_apollo_sdk.apollo_container.subprocess.run", fake_run
+    )
+    monkeypatch.setenv("USER", "alice")
+
+    container.start()
+
+    assert calls == [f"bash {script_path} -y -l --name yuqi"]
+
+
 def test_start_raises_when_packaged_script_is_missing(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
@@ -410,7 +451,7 @@ def test_start_raises_when_user_is_missing(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
-    script_path = tmp_path / "dev_start.sh"
+    script_path = tmp_path / "v11_dev_start.sh"
     script_path.write_text("#!/usr/bin/env bash\n", encoding="utf-8")
     container = apollo_container(monkeypatch)
     monkeypatch.setattr(
@@ -429,7 +470,7 @@ def test_start_raises_when_container_does_not_start(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
-    script_path = tmp_path / "dev_start.sh"
+    script_path = tmp_path / "v11_dev_start.sh"
     script_path.write_text("#!/usr/bin/env bash\n", encoding="utf-8")
     docker_container = FakeDockerContainer(status="exited")
     container = apollo_container(monkeypatch, docker_container)

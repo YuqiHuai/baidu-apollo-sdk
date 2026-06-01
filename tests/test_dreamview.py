@@ -16,6 +16,8 @@ from baidu_apollo_sdk.dreamview import (
 
 
 class FakeDreamviewContainer:
+    version = 11
+
     @property
     def ip_address(self) -> str:
         return "172.17.0.2"
@@ -55,6 +57,10 @@ class FakeWebSocket:
 
     def close(self) -> None:
         self.closed = True
+
+
+class FakeDreamviewV7Container(FakeDreamviewContainer):
+    version = 7
 
 
 def test_dreamview_connect_wraps_connection_failure(
@@ -174,3 +180,66 @@ def test_dreamview_can_disable_auto_reconnect(
 
     assert socket.closed is True
     assert dreamview.socket_client is None
+
+
+def test_dreamview_v7_sends_flat_hmi_action_payload() -> None:
+    socket = FakeWebSocket()
+    dreamview = Dreamview(FakeDreamviewV7Container())
+    dreamview.socket_client = socket
+
+    dreamview.set_mode(DreamviewModes.PNC)
+
+    assert socket.sent == [
+        {"type": "HMIAction", "action": "CHANGE_MODE", "value": "Pnc"}
+    ]
+
+
+def test_dreamview_v7_configures_sim_control_with_legacy_messages() -> None:
+    socket = FakeWebSocket(
+        recv_items=[json.dumps({"type": "VehicleParam", "length": 4.8})]
+    )
+    dreamview = Dreamview(FakeDreamviewV7Container())
+    dreamview.socket_client = socket
+
+    assert dreamview.set_up_for_sim_control() == {
+        "type": "VehicleParam",
+        "length": 4.8,
+    }
+    assert socket.sent == [
+        {"type": "HMIAction", "action": "CHANGE_MODE", "value": "Pnc"},
+        {"type": "ToggleSimControl", "enable": True},
+        {
+            "type": "HMIAction",
+            "action": "CHANGE_VEHICLE",
+            "value": "Mkz Example",
+        },
+    ]
+
+
+def test_dreamview_v7_sends_start_point_in_routing_request() -> None:
+    socket = FakeWebSocket(
+        recv_items=[
+            json.dumps({"type": "RoutingPointCheckResult"}),
+            json.dumps({"type": "RoutingPointCheckResult"}),
+            json.dumps({"type": "RoutingPointCheckResult"}),
+        ]
+    )
+    dreamview = Dreamview(FakeDreamviewV7Container())
+    dreamview.socket_client = socket
+
+    assert dreamview.set_start_point(1.0, 2.0, 0.5) is True
+    assert (
+        dreamview.start_routing(
+            [
+                {"x": 3.0, "y": 4.0, "heading": 0.6},
+                {"x": 5.0, "y": 6.0, "heading": 0.7},
+            ]
+        )
+        is True
+    )
+    assert socket.sent[-1] == {
+        "type": "SendRoutingRequest",
+        "start": {"x": 1.0, "y": 2.0, "heading": 0.5},
+        "waypoint": [{"x": 3.0, "y": 4.0, "heading": 0.6}],
+        "end": {"x": 5.0, "y": 6.0, "heading": 0.7},
+    }

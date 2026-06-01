@@ -3,10 +3,15 @@
 
 .. automodule:: baidu_apollo_sdk.cyber_rt.topics
 
-   
+
+   .. rubric:: Functions
+
+   .. autosummary::
+
+      get_topics
+
    .. rubric:: Classes
 
    .. autosummary::
-   
-      Topics
-   
+
+      TopicNamespace
