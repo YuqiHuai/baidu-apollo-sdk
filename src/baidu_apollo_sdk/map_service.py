@@ -166,7 +166,7 @@ def _get_point_distance_apart(
 class MapService:
     kSearchRadius = 3.0
     kMaxHeadingDiff = 1.0
-    kParkingRoutingDistanceThreshold = 21.0
+    kParkingRoutingDistanceThreshold = 20.0
 
     FLAGS_min_length_for_lane_change = 1.0
 

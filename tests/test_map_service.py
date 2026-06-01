@@ -149,9 +149,16 @@ def test_calc_parking_space_extra_info_routes_along_connected_lane() -> None:
             4141415.605918677,
             "11565dup1_1_-1",
         ),
+        (
+            "san_mateo",
+            "3111",
+            559897.1631688222,
+            4157624.968871962,
+            "2361dup1_1_-1"
+        )
     ],
 )
-def test_calc_parking_space_extra_info_from_hd_map(
+def test_calc_parking_space_extra_info_from_sim_map(
     map_name: str,
     parking_space_id: str,
     expected_x: float,
@@ -160,7 +167,7 @@ def test_calc_parking_space_extra_info_from_hd_map(
 ) -> None:
     map_proto = Map()
     map_proto.ParseFromString(
-        (Path(DEFAULT_MAPS_DIR) / map_name / "base_map.bin").read_bytes()
+        (Path(DEFAULT_MAPS_DIR) / map_name / "sim_map.bin").read_bytes()
     )
     service = MapService()
     service.lane_table = {lane.id.id: lane for lane in map_proto.lane}
