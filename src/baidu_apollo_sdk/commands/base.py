@@ -35,6 +35,8 @@ class LaneFollowCommand:
     end_pose: Pose
     waypoints: tuple[Pose, ...] = ()
     header: Header | None = None
+    command_id: int | None = None
+    target_speed: float | None = None
 
 
 @dataclass(frozen=True)

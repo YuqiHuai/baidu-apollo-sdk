@@ -1,15 +1,15 @@
 """Tests for version-aware semantic Apollo commands."""
 
+import io
 import json
 import subprocess
 import sys
+from email.message import Message
 from types import SimpleNamespace
 from typing import Any
+from urllib.error import HTTPError
 
 import pytest
-from baidu_apollo_proto.v11.modules.common_msgs.external_command_msgs import (
-    lane_follow_command_pb2,
-)
 from baidu_apollo_proto.v11.modules.common_msgs.routing_msgs import routing_pb2
 from shapely.geometry import Point
 
@@ -70,43 +70,98 @@ class FakeMapService:
         )
 
 
-def test_v11_lane_follow_uses_external_command_request() -> None:
-    client = FakeCyberClient()
-    sender = CommandSender(client)
+def test_v11_lane_follow_uses_external_command_request(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    requests: list[Any] = []
 
-    sender.send_lane_follow(
+    class FakeResponse:
+        def __enter__(self) -> "FakeResponse":
+            return self
+
+        def __exit__(
+            self,
+            exc_type: type[BaseException] | None,
+            exc: BaseException | None,
+            tb: Any,
+        ) -> None:
+            return None
+
+        def read(self) -> bytes:
+            return b'{"accepted": true, "request_id": "abc-123"}'
+
+    def fake_urlopen(request: Any) -> FakeResponse:
+        requests.append(request)
+        return FakeResponse()
+
+    monkeypatch.setattr(
+        "baidu_apollo_sdk.commands.sender.urlopen",
+        fake_urlopen,
+    )
+    sender = CommandSender(
+        None,
+        version=11,
+        lane_follow_service_url="http://10.0.0.9:9091",
+    )
+    response = sender.send_lane_follow(
         LaneFollowCommand(
             start_pose=Pose(1.0, 2.0, 0.1),
             waypoints=(Pose(3.0, 4.0),),
             end_pose=Pose(5.0, 6.0, 0.2),
             header=Header(123.5, "test", 7),
+            command_id=5,
+            target_speed=2.0,
         )
     )
 
-    assert len(client.publications) == 1
-    topic, raw = client.publications[0]
-    request = lane_follow_command_pb2.LaneFollowCommand()
-    request.ParseFromString(raw)
+    assert len(requests) == 1
+    request = requests[0]
+    assert request.full_url == "http://10.0.0.9:9091/lane_follow"
+    assert request.get_method() == "POST"
+    assert request.headers["Content-type"] == "application/json"
+    assert json.loads(request.data.decode("utf-8")) == {
+        "command_id": 5,
+        "endPose": {"x": 5.0, "y": 6.0, "heading": 0.2},
+        "isStartPoseSet": True,
+        "target_speed": 2.0,
+        "wayPoint": [
+            {"x": 1.0, "y": 2.0, "heading": 0.1},
+            {"x": 3.0, "y": 4.0},
+        ],
+    }
+    assert response == {"accepted": True, "request_id": "abc-123"}
 
-    assert topic.channel == "/apollo/external_command/lane_follow"
-    assert topic.msg_type == "apollo.external_command.LaneFollowCommand"
-    assert topic.proto_descriptor is not None
-    assert topic.proto_descriptor.name == (
-        "modules/common_msgs/external_command_msgs/lane_follow_command.proto"
+
+def test_v11_lane_follow_returns_http_error_body(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fake_urlopen(request: Any) -> None:
+        raise HTTPError(
+            request.full_url,
+            503,
+            "Service Unavailable",
+            hdrs=Message(),
+            fp=io.BytesIO(b'{"ok": false, "error": "no response"}'),
+        )
+
+    monkeypatch.setattr(
+        "baidu_apollo_sdk.commands.sender.urlopen",
+        fake_urlopen,
     )
-    assert request.is_start_pose_set
-    assert request.header.timestamp_sec == 123.5
-    assert request.header.module_name == "test"
-    assert request.header.sequence_num == 7
-    assert [(point.x, point.y) for point in request.way_point] == [
-        (1.0, 2.0),
-        (3.0, 4.0),
-    ]
-    assert request.way_point[0].heading == 0.1
-    assert not request.way_point[1].HasField("heading")
-    assert request.end_pose.x == 5.0
-    assert request.end_pose.y == 6.0
-    assert request.end_pose.heading == 0.2
+    sender = CommandSender(
+        None,
+        version=11,
+        lane_follow_service_url="http://10.0.0.9:9091",
+    )
+    response = sender.send_lane_follow(
+        LaneFollowCommand(
+            start_pose=Pose(1.0, 2.0, 0.1),
+            end_pose=Pose(5.0, 6.0, 0.2),
+            target_speed=2.0,
+        )
+    )
+
+    assert response == {"ok": False, "error": "no response"}
 
 
 def test_v11_parking_command_encodes_derived_routing_metadata() -> None:
@@ -155,6 +210,18 @@ def test_v11_parking_command_encodes_derived_routing_metadata() -> None:
         (4.0, 2.0, 0.4),
         (0.0, 2.0, 0.4),
     ]
+
+
+def test_v11_lane_follow_requires_service_url() -> None:
+    sender = CommandSender(None, version=11)
+
+    with pytest.raises(RuntimeError, match="lane_follow_service_url"):
+        sender.send_lane_follow(
+            LaneFollowCommand(
+                start_pose=Pose(1.0, 2.0, 0.1),
+                end_pose=Pose(5.0, 6.0, 0.2),
+            )
+        )
 
 
 def test_parking_command_requires_map_service() -> None:

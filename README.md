@@ -125,18 +125,25 @@ Dreamview URL.
 
 ## Commands
 
-Send a lane-follow command through cyber-bridge:
+Send a lane-follow command. Apollo v11 uses the HTTP bridge; Apollo v7 uses
+CyberRT publications:
 
 ```python
 from baidu_apollo_sdk.commands import CommandSender, LaneFollowCommand, Pose
 
-sender = CommandSender(bridge_client, version=container.version)
-sender.send_lane_follow(
+sender = CommandSender(
+    None,
+    version=11,
+    lane_follow_service_url=f"http://{container.ip_address}:9091",
+)
+response = sender.send_lane_follow(
     LaneFollowCommand(
         start_pose=Pose(x=587202.0, y=4141420.0, heading=0.0),
-        end_pose=Pose(x=587223.0, y=4141416.0),
+        end_pose=Pose(x=587223.0, y=4141416.0, heading=0.0),
+        command_id=5,
     )
 )
+print(response)
 ```
 
 Parking commands additionally need a loaded map service. The sender resolves
@@ -162,9 +169,10 @@ sender.send_parking(
 ```
 
 Apollo v7 consumes the routing request directly. Apollo v11 lane follow uses
-`/apollo/external_command/lane_follow`, while parking still uses the
-`external_command_with_old_routing.launch` compatibility adapter because
-cyber-bridge publishes messages but does not invoke Cyber service endpoints.
+the custom HTTP bridge on the Apollo container IP at port `9091`, while
+parking still uses the `external_command_with_old_routing.launch`
+compatibility adapter because cyber-bridge publishes messages but does not
+invoke Cyber service endpoints.
 
 With cyber-bridge already running in `apollo_dev_yuqi`, send the Apollo v7
 live-test requests with:
