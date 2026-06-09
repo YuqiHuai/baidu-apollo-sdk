@@ -1,6 +1,7 @@
 """Send one v11 parking request to the HTTP bridge inside Apollo."""
 
 from pathlib import Path
+from time import sleep
 
 from baidu_apollo_sdk.apollo_container import ApolloContainer
 from baidu_apollo_sdk.apollo_runtime import ApolloRuntime
@@ -30,6 +31,7 @@ def main() -> None:
         START_POSE.heading or 0.0,
     )
 
+    sleep(1.0)
     sender = CommandSender(
         None,
         version=container.version,
@@ -37,7 +39,7 @@ def main() -> None:
     )
     response = sender.send_parking(
         ParkingCommand(
-            initial_pose=START_POSE,
+            initial_pose=START_POSE, 
             parking_space_id=PARKING_SPOT_ID,
         )
     )

@@ -6,7 +6,7 @@ from baidu_apollo_sdk.apollo_container import ApolloContainer
 from baidu_apollo_sdk.commands import ActionCommand, CommandSender
 
 APOLLO_V11_PATH = Path("/home/yuqi/ResearchWorkspace/ICSE_2027/apollo-v11.0.0")
-ACTION_COMMAND = "PULL_OVER"
+ACTION_COMMAND = "START"
 
 
 def main() -> None:

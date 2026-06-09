@@ -43,7 +43,6 @@ def main() -> None:
                 y=4141421.025978817,
                 heading=-0.368695903,
             ),
-            command_id=20,
         )
     )
     print(response)
