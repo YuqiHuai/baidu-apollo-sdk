@@ -206,7 +206,9 @@ def test_v11_parking_command_uses_valet_parking_service(
     assert response == {"ok": True}
 
 
+@pytest.mark.parametrize("action", ("PULL_OVER", "STOP", "START"))
 def test_v11_action_command_uses_action_service(
+    action: str,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     requests: list[Any] = []
@@ -225,15 +227,31 @@ def test_v11_action_command_uses_action_service(
         external_command_service_url="http://10.0.0.9:9091",
     )
 
-    response = sender.send_action(ActionCommand(command="PULL_OVER"))
+    response = sender.send_action(ActionCommand(command=action))
 
     assert len(requests) == 1
     request = requests[0]
     assert request.full_url == "http://10.0.0.9:9091/action"
     assert json.loads(request.data.decode("utf-8")) == {
-        "command": "PULL_OVER"
+        "command": action
     }
     assert response == {"ok": True}
+
+
+def test_v11_action_command_rejects_v7_only_command() -> None:
+    sender = CommandSender(
+        None,
+        version=11,
+        external_command_service_url="http://10.0.0.9:9091",
+    )
+
+    with pytest.raises(
+        ValueError,
+        match=(
+            "Apollo v11 action command 'RESUME_CRUISE' is not supported"
+        ),
+    ):
+        sender.send_action(ActionCommand(command="RESUME_CRUISE"))
 
 
 def test_v11_commands_require_service_url() -> None:
@@ -274,20 +292,40 @@ except RuntimeError as exc:
     assert result.stdout.strip() == "Parking commands require a map service"
 
 
-def test_v7_action_command_reports_not_implemented_in_fresh_process() -> None:
+def test_v7_action_command_uses_planning_pad_in_fresh_process() -> None:
     script = """
+import json
 from baidu_apollo_sdk.commands import ActionCommand, CommandSender
+from baidu_apollo_proto.v7.modules.planning.proto.pad_msg_pb2 import PadMessage
 
 class FakeClient:
+    def __init__(self):
+        self.publications = []
+
     def publish(self, topic, message):
-        pass
+        self.publications.append((topic, message))
+
+results = {}
+for action in ("PULL_OVER", "STOP", "RESUME_CRUISE"):
+    client = FakeClient()
+    CommandSender(client, version=7).send_action(
+        ActionCommand(command=action)
+    )
+    message = PadMessage()
+    message.ParseFromString(client.publications[0][1])
+    results[action] = {
+        "channel": client.publications[0][0].channel,
+        "action": message.action,
+    }
 
 try:
     CommandSender(FakeClient(), version=7).send_action(
-        ActionCommand(command="PULL_OVER")
+        ActionCommand(command="START")
     )
-except RuntimeError as exc:
-    print(exc)
+except ValueError as exc:
+    results["START_ERROR"] = str(exc)
+
+print(json.dumps(results))
 """
 
     result = subprocess.run(
@@ -297,9 +335,19 @@ except RuntimeError as exc:
         text=True,
     )
 
-    assert result.stdout.strip() == (
-        "Apollo v7 action commands are not implemented"
-    )
+    assert json.loads(result.stdout) == {
+        "PULL_OVER": {"channel": "/apollo/planning/pad", "action": 3},
+        "STOP": {"channel": "/apollo/planning/pad", "action": 4},
+        "RESUME_CRUISE": {
+            "channel": "/apollo/planning/pad",
+            "action": 5,
+        },
+        "START_ERROR": (
+            "Apollo v7 action command 'START' is not supported; "
+            "supported commands: PULL_OVER, RESUME_CRUISE, STOP"
+        ),
+    }
+
 
 
 def test_sender_waits_between_multi_message_publications(

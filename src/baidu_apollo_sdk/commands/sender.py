@@ -11,12 +11,14 @@ from baidu_apollo_sdk.proto_version import claim_proto_version
 from baidu_apollo_sdk.version import ApolloVersion
 
 from .base import (
+    ACTION_COMMANDS_V11,
     ActionCommand,
     CommandEncoder,
     LaneFollowCommand,
     ParkingCommand,
     Pose,
     Publication,
+    validate_action_command,
 )
 
 
@@ -147,6 +149,7 @@ class CommandSender:
     def _send_v11_action(
         self, command: ActionCommand
     ) -> dict[str, Any] | None:
+        validate_action_command(command, ACTION_COMMANDS_V11, "Apollo v11")
         return self._post_v11_service("/action", {"command": command.command})
 
     def _post_v11_service(

@@ -1,5 +1,6 @@
 """Version-independent command types."""
 
+from collections.abc import Collection
 from dataclasses import dataclass
 from typing import Any, Protocol
 
@@ -56,6 +57,28 @@ class ActionCommand:
     command: str
 
 
+BASE_COMMANDS = frozenset(
+    {"FOLLOW", "CHANGE_LEFT", "CHANGE_RIGHT", "PULL_OVER", "STOP"}
+)
+ACTION_COMMANDS_V7 = frozenset(BASE_COMMANDS | {"RESUME_CRUISE"})
+ACTION_COMMANDS_V11 = frozenset(BASE_COMMANDS | {"START"})
+
+
+def validate_action_command(
+    command: ActionCommand,
+    supported_commands: Collection[str],
+    version_label: str,
+) -> None:
+    """Reject action commands unsupported by one Apollo version."""
+    if command.command in supported_commands:
+        return
+    supported = ", ".join(sorted(supported_commands))
+    raise ValueError(
+        f"{version_label} action command {command.command!r} is not "
+        f"supported; supported commands: {supported}"
+    )
+
+
 @dataclass(frozen=True)
 class Publication:
     """One serialized-message publication produced for a command."""
@@ -67,9 +90,7 @@ class Publication:
 class CommandEncoder(Protocol):
     """Compile semantic commands for one Apollo version."""
 
-    def encode_lane_follow(
-        self, command: LaneFollowCommand
-    ) -> tuple[Publication, ...]:
+    def encode_lane_follow(self, command: LaneFollowCommand) -> tuple[Publication, ...]:
         """Compile a lane-follow command."""
         ...
 

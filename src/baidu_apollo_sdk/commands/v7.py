@@ -2,6 +2,7 @@
 
 from typing import Any
 
+from baidu_apollo_proto.v7.modules.planning.proto import pad_msg_pb2
 from baidu_apollo_proto.v7.modules.routing.proto.routing_pb2 import (
     RoutingRequest,
 )
@@ -11,7 +12,14 @@ from google.protobuf.message import Message
 from baidu_apollo_sdk.cyber_rt.channel import Topic
 from baidu_apollo_sdk.cyber_rt.decoder import decode_proto
 
-from .base import ActionCommand, LaneFollowCommand, ParkingCommand, Publication
+from .base import (
+    ACTION_COMMANDS_V7,
+    ActionCommand,
+    LaneFollowCommand,
+    ParkingCommand,
+    Publication,
+    validate_action_command,
+)
 from .routing import (
     _set_header,
     encode_parking_request,
@@ -19,6 +27,15 @@ from .routing import (
 )
 
 TASK_MANAGER_CHANNEL = "/apollo/task_manager"
+PLANNING_PAD_CHANNEL = "/apollo/planning/pad"
+_ACTION_VALUES_V7 = {
+    "FOLLOW": pad_msg_pb2.FOLLOW,
+    "CHANGE_LEFT": pad_msg_pb2.CHANGE_LEFT,
+    "CHANGE_RIGHT": pad_msg_pb2.CHANGE_RIGHT,
+    "PULL_OVER": pad_msg_pb2.PULL_OVER,
+    "STOP": pad_msg_pb2.STOP,
+    "RESUME_CRUISE": pad_msg_pb2.RESUME_CRUISE,
+}
 
 
 def _task_manager_topic() -> Topic[Message]:
@@ -26,6 +43,17 @@ def _task_manager_topic() -> Topic[Message]:
     message_type = task_manager_pb2.Task
     return Topic(
         TASK_MANAGER_CHANNEL,
+        message_type.DESCRIPTOR.full_name,
+        decode_proto(message_type),
+        message_type.DESCRIPTOR.file,
+    )
+
+
+def _planning_pad_topic() -> Topic[Message]:
+    """Build v7 planning pad topic metadata."""
+    message_type = pad_msg_pb2.PadMessage
+    return Topic(
+        PLANNING_PAD_CHANNEL,
         message_type.DESCRIPTOR.full_name,
         decode_proto(message_type),
         message_type.DESCRIPTOR.file,
@@ -73,5 +101,8 @@ class CommandEncoderV7:
         )
 
     def encode_action(self, command: ActionCommand) -> tuple[Publication, ...]:
-        """Report that Apollo v7 action commands are not implemented yet."""
-        raise RuntimeError("Apollo v7 action commands are not implemented")
+        """Encode a v7 planning pad action command."""
+        validate_action_command(command, ACTION_COMMANDS_V7, "Apollo v7")
+        pad_message = pad_msg_pb2.PadMessage()
+        pad_message.action = _ACTION_VALUES_V7[command.command]
+        return (Publication(topic=_planning_pad_topic(), message=pad_message),)
