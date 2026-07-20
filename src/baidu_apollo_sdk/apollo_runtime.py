@@ -327,10 +327,15 @@ class ApolloRuntime:
             )
 
         configuration_string = f"--map_dir=/apollo/modules/map/data/{map_id}"
-        # Write configuration to Apollo's shared global flag file.
+        flag_file = "/apollo/modules/common/data/global_flagfile.txt"
+        # Update the current map selection instead of accumulating new flags.
         self.container.exec_command(
-            f"bash -c \"echo '{configuration_string}'"
-            ' >> /apollo/modules/common/data/global_flagfile.txt"',
+            'bash -c "'
+            f"if grep -q '^--map_dir=' {flag_file}; then "
+            f"sed -i 's|^--map_dir=.*$|{configuration_string}|' {flag_file}; "
+            "else "
+            f"echo '{configuration_string}' >> {flag_file}; "
+            'fi"',
             use_apollo_env=False,
             stream=True,
         )

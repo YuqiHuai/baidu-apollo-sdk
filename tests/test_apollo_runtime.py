@@ -229,7 +229,7 @@ def test_install_hd_map_raises_when_generated_files_are_missing() -> None:
         )
 
 
-def test_set_hd_map_validates_map_and_writes_global_flag() -> None:
+def test_set_hd_map_replaces_or_appends_global_flag() -> None:
     container = FakeContainer()
     container.command_outputs[
         "find /apollo/modules/map/data -maxdepth 1"
@@ -239,8 +239,13 @@ def test_set_hd_map_validates_map_and_writes_global_flag() -> None:
     runtime_for(container).set_hd_map("borregas_ave")
 
     assert container.commands[-1] == CommandCall(
-        "bash -c \"echo '--map_dir=/apollo/modules/map/data/borregas_ave'"
-        ' >> /apollo/modules/common/data/global_flagfile.txt"',
+        "bash -c \"if grep -q '^--map_dir=' "
+        "/apollo/modules/common/data/global_flagfile.txt; then "
+        "sed -i 's|^--map_dir=.*$|"
+        "--map_dir=/apollo/modules/map/data/borregas_ave|' "
+        "/apollo/modules/common/data/global_flagfile.txt; else "
+        "echo '--map_dir=/apollo/modules/map/data/borregas_ave' >> "
+        '/apollo/modules/common/data/global_flagfile.txt; fi"',
         stream=True,
         use_apollo_env=False,
     )

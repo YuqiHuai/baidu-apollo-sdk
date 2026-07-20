@@ -85,6 +85,21 @@ def test_load_map_service_rejects_missing_map() -> None:
         load_map_service("missing")
 
 
+def test_load_map_from_proto_indexes_yield_signs(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    map_proto = Map()
+    yield_sign = getattr(map_proto, "yield").add()
+    yield_sign.id.id = "yield-sign-1"
+    service = MapService()
+    monkeypatch.setattr(service, "build_lane_segment_kd_tree", lambda: None)
+
+    service.load_map_from_proto(map_proto)
+
+    assert list(service.get_yield_signs(Point())) == ["yield-sign-1"]
+    assert service.get_yield_sign_by_id("yield-sign-1") == yield_sign
+
+
 def test_kdtree_queries_nearest_geometry() -> None:
     near = LineString([(0, 0), (1, 0)])
     far = LineString([(10, 0), (11, 0)])

@@ -183,6 +183,7 @@ class MapService:
         self.crosswalk_table: dict[str, Any] = {}
         self.signal_table: dict[str, Any] = {}
         self.stop_sign_table: dict[str, Any] = {}
+        self.yield_sign_table: dict[str, Any] = {}
         self.overlap_table: dict[str, Any] = {}
         self.parking_space_table: dict[str, Any] = {}
 
@@ -210,6 +211,7 @@ class MapService:
             (map_proto.crosswalk, self.crosswalk_table),
             (map_proto.signal, self.signal_table),
             (map_proto.stop_sign, self.stop_sign_table),
+            (getattr(map_proto, "yield"), self.yield_sign_table),
             (map_proto.overlap, self.overlap_table),
             (map_proto.parking_space, self.parking_space_table),
         ]
@@ -267,6 +269,14 @@ class MapService:
             return self.stop_sign_table.keys()
         raise NotImplementedError()
 
+    def get_yield_signs(
+        self, point: Point, distance: float = 0.0
+    ) -> Iterable[str]:
+        """Return yield-sign IDs, optionally constrained by distance."""
+        if distance == 0.0:
+            return self.yield_sign_table.keys()
+        raise NotImplementedError()
+
     def get_lane_by_id(self, lane_id: str) -> Any:
         return self.lane_table[lane_id]
 
@@ -313,6 +323,10 @@ class MapService:
 
     def get_stop_sign_by_id(self, stop_sign_id: str) -> Any:
         return self.stop_sign_table[stop_sign_id]
+
+    def get_yield_sign_by_id(self, yield_sign_id: str) -> Any:
+        """Return the indexed yield-sign protobuf with the requested ID."""
+        return self.yield_sign_table[yield_sign_id]
 
     def get_overlap_by_id(self, overlap_id: str) -> Any:
         return self.overlap_table[overlap_id]
