@@ -273,6 +273,21 @@ class DreamviewBase(metaclass=_DreamviewMeta):
         """Send a routing request."""
         raise NotImplementedError
 
+    def start_parking_routing(
+        self,
+        waypoints: list[dict[str, float]],
+        *,
+        parking_space_id: str,
+        lane_width: float = 3.0,
+    ) -> bool:
+        """Send a valet-parking routing request.
+
+        Unlike :meth:`start_routing`, the final waypoint is a parking-space
+        entry point rather than a lane-anchored point, so it commonly has no
+        heading.
+        """
+        raise NotImplementedError
+
     def load_dynamic_models(self) -> None:
         """Request available dynamic models."""
         raise NotImplementedError

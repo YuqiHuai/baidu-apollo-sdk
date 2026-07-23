@@ -255,3 +255,47 @@ def test_dreamview_v7_sends_start_point_in_routing_request() -> None:
         "waypoint": [{"x": 3.0, "y": 4.0, "heading": 0.6}],
         "end": {"x": 5.0, "y": 6.0, "heading": 0.7},
     }
+
+
+def test_dreamview_v7_sends_parking_routing_request_without_end_heading() -> None:
+    socket = FakeWebSocket(
+        recv_items=[json.dumps({"type": "RoutingPointCheckResult"})]
+    )
+    dreamview = Dreamview(FakeDreamviewV7Container())
+    dreamview.socket_client = socket
+
+    assert dreamview.set_start_point(1.0, 2.0, 0.5) is True
+    assert (
+        dreamview.start_parking_routing(
+            [{"x": 5.0, "y": 6.0}],
+            parking_space_id="PS_001",
+        )
+        is True
+    )
+    assert socket.sent[-1] == {
+        "type": "SendParkingRoutingRequest",
+        "start": {"x": 1.0, "y": 2.0, "heading": 0.5},
+        "waypoint": [],
+        "end": {"x": 5.0, "y": 6.0},
+        "parkingInfo": {"parkingSpaceId": "PS_001"},
+        "laneWidth": 3.0,
+    }
+
+
+def test_dreamview_v7_rejects_parking_routing_missing_coordinates() -> None:
+    dreamview = Dreamview(FakeDreamviewV7Container())
+    dreamview.socket_client = FakeWebSocket()
+
+    assert (
+        dreamview.start_parking_routing([], parking_space_id="PS_001") is False
+    )
+
+
+def test_dreamview_v7_parking_routing_requires_start_point() -> None:
+    dreamview = Dreamview(FakeDreamviewV7Container())
+    dreamview.socket_client = FakeWebSocket()
+
+    with pytest.raises(RuntimeError, match="set_start_point"):
+        dreamview.start_parking_routing(
+            [{"x": 5.0, "y": 6.0}], parking_space_id="PS_001"
+        )

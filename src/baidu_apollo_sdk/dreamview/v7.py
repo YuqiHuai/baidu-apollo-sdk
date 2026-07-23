@@ -103,6 +103,47 @@ class DreamviewV7(DreamviewBase):
         )
         return True
 
+    def start_parking_routing(
+        self,
+        waypoints: list[dict[str, float]],
+        *,
+        parking_space_id: str,
+        lane_width: float = 3.0,
+    ) -> bool:
+        """Send a v7 valet-parking routing request through the task manager.
+
+        Mirrors Dreamview's own "Valet Parking" routing-editor action
+        (``SendParkingRoutingRequest``): the backend publishes a plain
+        ``RoutingRequest`` immediately (for visualization) and forwards a
+        ``ParkingRoutingTask`` carrying ``parking_space_id`` to the task
+        manager, which is what actually drives Planning into
+        ``valet_parking``. The parking-space entry point (the final
+        waypoint) is not lane-anchored, so only ``x``/``y`` are required —
+        unlike :meth:`start_routing`, a missing heading is not an error.
+        """
+        if not waypoints or any(
+            "x" not in wp or "y" not in wp for wp in waypoints
+        ):
+            logger.error(
+                "{} parking route has invalid waypoints", self._log_prefix()
+            )
+            return False
+        if self._start_point is None:
+            raise RuntimeError(
+                "Apollo v7 parking routing requires set_start_point() first"
+            )
+        self._send_payload(
+            {
+                "type": "SendParkingRoutingRequest",
+                "start": self._start_point,
+                "waypoint": waypoints[:-1],
+                "end": waypoints[-1],
+                "parkingInfo": {"parkingSpaceId": parking_space_id},
+                "laneWidth": lane_width,
+            }
+        )
+        return True
+
     def load_dynamic_models(self) -> None:
         """Reject Dreamview+ dynamic-model commands for v7."""
         raise ValueError("Dynamic models are not supported by Apollo v7")
