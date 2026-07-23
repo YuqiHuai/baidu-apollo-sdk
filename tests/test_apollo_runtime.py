@@ -2,11 +2,15 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import cast
+from urllib.request import urlopen
 
 import pytest
 
 from baidu_apollo_sdk.apollo_container import ApolloContainer
-from baidu_apollo_sdk.apollo_runtime import ApolloRuntime
+from baidu_apollo_sdk.apollo_runtime import (
+    SERVICE_BRIDGE_RUNFILES_PATH,
+    ApolloRuntime,
+)
 
 
 @dataclass
@@ -122,6 +126,70 @@ def test_ensure_container_starts_when_stopped_or_restart_requested() -> None:
     running_container = FakeContainer()
     runtime_for(running_container).ensure_container(restart=True)
     assert running_container.started is True
+
+
+CYBER_NODE_LIST_COMMAND = (
+    "/apollo/bazel-bin/cyber/tools/cyber_node/cyber_node list"
+)
+
+
+def test_start_service_bridge_rejects_non_v11() -> None:
+    container = FakeContainer(version=7)
+
+    with pytest.raises(RuntimeError, match="only available for Apollo v11"):
+        runtime_for(container).start_service_bridge()
+
+    assert container.commands == []
+
+
+def test_start_service_bridge_skips_when_already_running() -> None:
+    container = FakeContainer(version=11)
+    container.command_outputs[CYBER_NODE_LIST_COMMAND] = (
+        "Number of active nodes: 1\n\nservice_bridge\n"
+    )
+
+    runtime_for(container).start_service_bridge()
+
+    assert container.commands == [
+        CommandCall(CYBER_NODE_LIST_COMMAND),
+    ]
+
+
+def test_start_service_bridge_starts_detached_with_default_host_and_port() -> (
+    None
+):
+    container = FakeContainer(version=11)
+    container.command_outputs[CYBER_NODE_LIST_COMMAND] = (
+        "Number of active nodes: 0\n\n"
+    )
+
+    runtime_for(container).start_service_bridge()
+
+    expected_command = (
+        f"export PYTHONPATH={SERVICE_BRIDGE_RUNFILES_PATH}:$PYTHONPATH "
+        "&& python3 modules/contrib/cyber_bridge/service_bridge.py "
+        "--host 0.0.0.0 --port 9091"
+    )
+    assert container.commands == [
+        CommandCall(CYBER_NODE_LIST_COMMAND),
+        CommandCall(expected_command, detach=True),
+    ]
+
+
+def test_start_service_bridge_honors_custom_host_and_port() -> None:
+    container = FakeContainer(version=11)
+    container.command_outputs[CYBER_NODE_LIST_COMMAND] = (
+        "Number of active nodes: 0\n\n"
+    )
+
+    runtime_for(container).start_service_bridge(host="127.0.0.1", port=9200)
+
+    expected_command = (
+        f"export PYTHONPATH={SERVICE_BRIDGE_RUNFILES_PATH}:$PYTHONPATH "
+        "&& python3 modules/contrib/cyber_bridge/service_bridge.py "
+        "--host 127.0.0.1 --port 9200"
+    )
+    assert container.commands[-1] == CommandCall(expected_command, detach=True)
 
 
 def test_list_cyber_nodes_skips_summary_and_blank_lines() -> None:
@@ -293,3 +361,42 @@ def test_runtime_lists_cyber_nodes_in_available_container(
     assert all(
         node_name.strip() == node_name and node_name for node_name in nodes
     )
+
+
+@pytest.mark.integration
+def test_runtime_starts_service_bridge_in_available_container(
+    apollo_test_container: ApolloContainer,
+) -> None:
+    runtime = ApolloRuntime(apollo_test_container)
+    if not runtime.container.check_file_exists(
+        f"{SERVICE_BRIDGE_RUNFILES_PATH}/cyber/python/cyber_py3/cyber.py"
+    ):
+        pytest.skip("service_bridge bazel target not built for this container")
+
+    runtime.start_service_bridge()
+    runtime.wait_for_node("service_bridge", poll_interval=0.5, timeout=60)
+
+    assert "service_bridge" in runtime.list_cyber_nodes()
+
+    url = f"http://{apollo_test_container.ip_address}:9091/healthz"
+    with urlopen(url, timeout=5) as response:  # noqa: S310
+        assert response.status == 200
+
+
+@pytest.mark.integration
+def test_runtime_start_service_bridge_is_idempotent(
+    apollo_test_container: ApolloContainer,
+) -> None:
+    runtime = ApolloRuntime(apollo_test_container)
+    if not runtime.container.check_file_exists(
+        f"{SERVICE_BRIDGE_RUNFILES_PATH}/cyber/python/cyber_py3/cyber.py"
+    ):
+        pytest.skip("service_bridge bazel target not built for this container")
+
+    runtime.start_service_bridge()
+    runtime.wait_for_node("service_bridge", poll_interval=0.5, timeout=60)
+
+    # Calling it again should detect the running node and not error out.
+    runtime.start_service_bridge()
+
+    assert "service_bridge" in runtime.list_cyber_nodes()

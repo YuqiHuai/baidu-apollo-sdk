@@ -344,7 +344,8 @@ print(json.dumps(results))
         },
         "START_ERROR": (
             "Apollo v7 action command 'START' is not supported; "
-            "supported commands: PULL_OVER, RESUME_CRUISE, STOP"
+            "supported commands: CHANGE_LEFT, CHANGE_RIGHT, FOLLOW, "
+            "PULL_OVER, RESUME_CRUISE, STOP"
         ),
     }
 

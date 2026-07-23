@@ -10,6 +10,15 @@ from baidu_apollo_sdk.logging import container_log_prefix, get_logger
 
 logger = get_logger()
 
+# Stable path to the bazel-built runfiles tree for the v11 service_bridge
+# py_binary target. Resolving imports (cyber bindings + generated external
+# command protobufs) through this tree avoids depending on the bazel cache's
+# hash-named output directories, which differ per build.
+SERVICE_BRIDGE_RUNFILES_PATH = (
+    "/apollo/bazel-bin/modules/contrib/cyber_bridge/"
+    "_install_service_bridge.runfiles/apollo"
+)
+
 
 class ApolloRuntime:
     """Runs Apollo build, startup, map, and recorder commands in a container.
@@ -95,6 +104,45 @@ class ApolloRuntime:
             return
         logger.info("{} start bridge", container_log_prefix(self.container))
         self.container.exec_command("bash scripts/bridge.sh", detach=True)
+
+    def start_service_bridge(
+        self, host: str = "0.0.0.0", port: int = 9091
+    ) -> None:
+        """Start the Apollo v11 external-command HTTP service bridge.
+
+        Runs ``service_bridge.py`` in detached mode, exposing the
+        ``/action``, ``/lane_follow``, and ``/valet_parking`` HTTP
+        endpoints used by ``CommandSender``. Binds ``0.0.0.0`` by default
+        so the bridge is reachable via ``ApolloContainer.ip_address`` from
+        outside the container, not just from within it.
+
+        Args:
+            host: Interface to bind. Defaults to all interfaces.
+            port: Port to listen on.
+
+        Raises:
+            RuntimeError: If the container is not running Apollo v11.
+        """
+        if self.container.version != 11:
+            raise RuntimeError(
+                "service bridge is only available for Apollo v11"
+            )
+        nodes = self.list_cyber_nodes()
+        if "service_bridge" in nodes:
+            logger.info(
+                "{} service bridge running",
+                container_log_prefix(self.container),
+            )
+            return
+        logger.info(
+            "{} start service bridge", container_log_prefix(self.container)
+        )
+        command = (
+            f"export PYTHONPATH={SERVICE_BRIDGE_RUNFILES_PATH}:$PYTHONPATH "
+            "&& python3 modules/contrib/cyber_bridge/service_bridge.py "
+            f"--host {host} --port {port}"
+        )
+        self.container.exec_command(command, detach=True)
 
     def ensure_container(
         self, restart: bool = False, verbose: bool = False
