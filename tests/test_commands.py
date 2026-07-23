@@ -232,9 +232,7 @@ def test_v11_action_command_uses_action_service(
     assert len(requests) == 1
     request = requests[0]
     assert request.full_url == "http://10.0.0.9:9091/action"
-    assert json.loads(request.data.decode("utf-8")) == {
-        "command": action
-    }
+    assert json.loads(request.data.decode("utf-8")) == {"command": action}
     assert response == {"ok": True}
 
 
@@ -247,9 +245,7 @@ def test_v11_action_command_rejects_v7_only_command() -> None:
 
     with pytest.raises(
         ValueError,
-        match=(
-            "Apollo v11 action command 'RESUME_CRUISE' is not supported"
-        ),
+        match=("Apollo v11 action command 'RESUME_CRUISE' is not supported"),
     ):
         sender.send_action(ActionCommand(command="RESUME_CRUISE"))
 
@@ -348,7 +344,6 @@ print(json.dumps(results))
             "PULL_OVER, RESUME_CRUISE, STOP"
         ),
     }
-
 
 
 def test_sender_waits_between_multi_message_publications(

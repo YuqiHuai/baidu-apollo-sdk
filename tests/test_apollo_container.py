@@ -195,6 +195,28 @@ def test_exec_command_sources_apollo_environment_by_default(
     ]
 
 
+def test_exec_command_honors_explicit_user_override(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    docker_container = FakeDockerContainer(output=b"ok")
+    container = apollo_container(monkeypatch, docker_container)
+    monkeypatch.setenv("USER", "alice")
+
+    output = container.exec_command("echo ok", user="root")
+
+    assert output == "ok"
+    assert docker_container.exec_calls == [
+        ExecRunCall(
+            command='bash -c "source /apollo/scripts/apollo_base.sh; echo ok"',
+            user="root",
+            workdir="/apollo",
+            environment={"HOME": "/home/root"},
+            stream=False,
+            detach=False,
+        )
+    ]
+
+
 def test_exec_command_can_skip_apollo_environment(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

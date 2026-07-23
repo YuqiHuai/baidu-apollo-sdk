@@ -125,6 +125,7 @@ class ApolloContainer:
         detach: bool = False,
         stream: bool = False,
         use_apollo_env: bool = True,
+        user: str | None = None,
     ) -> str:
         """Execute a command in the container.
 
@@ -136,6 +137,13 @@ class ApolloContainer:
                 False.
             use_apollo_env: Whether to source Apollo's base environment before
                 running the command.
+            user: User to run the command as. Defaults to the `USER`
+                environment variable. Apollo's own module processes
+                (dreamview, monitor, mainboard) run as root inside the
+                container; commands that need to read their published
+                CyberRT channels over shared memory (e.g. cyber_recorder)
+                must also run as root, since CyberRT's shared-memory
+                transport is permission-sensitive across UIDs.
 
         Returns:
             The output of the command if detach is False, otherwise an empty
@@ -143,7 +151,8 @@ class ApolloContainer:
         """
         logger.info("{} exec {}", container_log_prefix(self), command)
         container = self.docker_client.containers.get(self.container_name)
-        user = os.environ.get("USER")
+        if user is None:
+            user = os.environ.get("USER")
         assert user is not None, "USER environment variable is not set"
 
         if use_apollo_env:

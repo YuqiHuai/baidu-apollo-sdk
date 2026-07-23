@@ -166,6 +166,12 @@ class ApolloRuntime:
     ) -> None:
         """Start recording cyber data in the container.
 
+        Runs as root: Apollo's own module processes (dreamview, monitor,
+        mainboard) run as root inside the container, and CyberRT's
+        shared-memory transport is permission-sensitive across UIDs. A
+        recorder started as a different user discovers channels fine but
+        silently fails to receive most published messages.
+
         Args:
             record_name: The name of the record file.
             segment_duration: The duration of each segment in seconds.
@@ -183,14 +189,51 @@ class ApolloRuntime:
             container_log_prefix(self.container),
             record_name,
         )
-        self.container.exec_command(cmd, detach=True)
+        self.container.exec_command(cmd, detach=True, user="root")
 
-    def stop_recorder(self) -> None:
-        """Stop all running recorders in the container."""
+    def stop_recorder(
+        self, timeout: float = 10.0, poll_interval: float = 0.2
+    ) -> None:
+        """Stop all running recorders and wait for them to exit.
+
+        Runs as root, matching ``start_recorder``: the recorder process is
+        owned by root, and only root can signal it. Blocks until the
+        recorder process has actually exited (not just been signalled), so
+        the record file is fully flushed and finalized by the time this
+        returns.
+
+        Args:
+            timeout: Maximum time to wait for the recorder to exit.
+            poll_interval: Time between liveness checks.
+
+        Raises:
+            TimeoutError: If the recorder is still running after `timeout`.
+        """
         logger.info("{} stop recorders", container_log_prefix(self.container))
+        # Match on process name (-x), not full command line (-f): a -f
+        # pattern self-matches the invoking "bash -c '...cyber_recorder...'"
+        # wrapper, since that wrapper's own command line also contains the
+        # search string, which would make the liveness check below always
+        # see something "running" and never return.
         self.container.exec_command(
-            "bash -c 'pgrep -f cyber_recorder | xargs -r kill -2'"
+            "bash -c 'pgrep -x cyber_recorder | xargs -r kill -2'",
+            user="root",
         )
+        start_time = perf_counter()
+        while self._recorder_running():
+            sleep(poll_interval)
+            if perf_counter() - start_time > timeout:
+                raise TimeoutError(
+                    "Timeout while waiting for cyber_recorder to stop"
+                )
+
+    def _recorder_running(self) -> bool:
+        output = self.container.exec_command(
+            "bash -c 'pgrep -x cyber_recorder || true'",
+            use_apollo_env=False,
+            user="root",
+        )
+        return bool(output.strip())
 
     def list_cyber_nodes(self) -> list[str]:
         """List all cyber nodes in the container.
