@@ -91,6 +91,24 @@ class ApolloContainer:
         except docker.errors.NotFound:
             return False
 
+    def stop(self, timeout: int = 30) -> None:
+        """Stop the container if it exists, leaving it on disk to restart.
+
+        Stops rather than removes: the container carries the Apollo build
+        tree and bazel cache, so removing it would force a full rebuild on
+        the next run. A container that is already gone is not an error --
+        the postcondition (not running) already holds.
+
+        Args:
+            timeout: Seconds to wait for a graceful stop before SIGKILL.
+        """
+        logger.info("{} stop container", container_log_prefix(self))
+        try:
+            container = self.docker_client.containers.get(self.container_name)
+        except docker.errors.NotFound:
+            return
+        container.stop(timeout=timeout)
+
     @property
     def container_name(self) -> str:
         """Get the container name.

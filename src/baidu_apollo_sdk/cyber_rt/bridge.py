@@ -373,7 +373,12 @@ class CyberBridge:
             return
         logger.info("{} bridge spin", container_log_prefix(self.container))
         self.spinning = True
-        self.t = Thread(target=self._spin)
+        # Daemon: this is a background socket receive loop, and it must never
+        # be the reason the interpreter stays alive. Callers that forget to
+        # `stop()` (or crash before reaching it) would otherwise hang at exit
+        # forever with the loop still spinning -- a completed CLI run that
+        # never returns, holding Apollo's Planning/Routing modules stopped.
+        self.t = Thread(target=self._spin, daemon=True)
         self.t.start()
 
     def stop(self) -> None:

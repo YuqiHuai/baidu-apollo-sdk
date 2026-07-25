@@ -19,6 +19,12 @@ SERVICE_BRIDGE_RUNFILES_PATH = (
     "_install_service_bridge.runfiles/apollo"
 )
 
+# The cyber_bridge binary itself, as it appears in the container's process
+# table. `scripts/bridge.sh` runs it in the foreground rather than exec'ing
+# it, so matching this path identifies the bridge process without also
+# matching the wrapper shell (which exits on its own once the binary does).
+BRIDGE_BINARY = "/apollo/bazel-bin/modules/contrib/cyber_bridge/cyber_bridge"
+
 
 class ApolloRuntime:
     """Runs Apollo build, startup, map, and recorder commands in a container.
@@ -93,17 +99,56 @@ class ApolloRuntime:
             "bash scripts/bootstrap.sh start_plus", stream=stream
         )
 
+    def bridge_process_users(self) -> list[str]:
+        """Return the owning user of every running cyber_bridge process."""
+        output = self.container.exec_command(
+            "ps -eo user:32,args --no-headers", use_apollo_env=False
+        )
+        users = []
+        for line in output.strip().splitlines():
+            parts = line.split(None, 1)
+            if len(parts) == 2 and parts[1].startswith(BRIDGE_BINARY):
+                users.append(parts[0])
+        return users
+
     def start_bridge(self) -> None:
-        """Start cyber-bridge in detached mode inside the container."""
-        # check if bridge is already running
-        nodes = self.list_cyber_nodes()
-        if "bridge" in nodes:
+        """Start cyber-bridge in detached mode inside the container, as root.
+
+        cyber_bridge has to run as root. It subscribes to channels published
+        by Apollo's own module processes (planning, routing, and
+        dreamview/sim_control), every one of which runs as root, and
+        CyberRT's shared-memory transport is permission-sensitive across
+        UIDs -- see `ApolloContainer.exec_command`'s `user` argument. A
+        non-root bridge connects, accepts subscriptions, and reports no
+        error while delivering *zero* messages, which downstream looks
+        exactly like an ego vehicle that never moved and a behavior that
+        never activated.
+
+        Readiness is therefore decided by the bridge process's owner, not
+        by whether a node named "bridge" is registered: a non-root bridge
+        registers that node just the same, so reusing it on that basis is
+        what silently breaks. Such a bridge is killed and replaced.
+        """
+        users = self.bridge_process_users()
+        if users and all(user == "root" for user in users):
             logger.info(
                 "{} bridge running", container_log_prefix(self.container)
             )
             return
+        if users:
+            logger.warning(
+                "{} replacing cyber_bridge owned by {} -- a non-root bridge "
+                "silently receives no messages",
+                container_log_prefix(self.container),
+                ", ".join(sorted(set(users))),
+            )
+            self.container.exec_command(
+                f"pkill -f {BRIDGE_BINARY}", user="root", use_apollo_env=False
+            )
         logger.info("{} start bridge", container_log_prefix(self.container))
-        self.container.exec_command("bash scripts/bridge.sh", detach=True)
+        self.container.exec_command(
+            "bash scripts/bridge.sh", detach=True, user="root"
+        )
 
     def start_service_bridge(
         self, host: str = "0.0.0.0", port: int = 9091
@@ -180,6 +225,7 @@ class ApolloRuntime:
         recorder_bin = (
             "/apollo/bazel-bin/cyber/tools/cyber_recorder/cyber_recorder"
         )
+        filename = f"/apollo/data/bag/{record_name}"
         cmd = (
             f"{recorder_bin} record -a -o /apollo/data/bag/{record_name} "
             f"-i {segment_duration}"
@@ -190,6 +236,7 @@ class ApolloRuntime:
             record_name,
         )
         self.container.exec_command(cmd, detach=True, user="root")
+        return f"{filename}.00000"
 
     def stop_recorder(
         self, timeout: float = 10.0, poll_interval: float = 0.2

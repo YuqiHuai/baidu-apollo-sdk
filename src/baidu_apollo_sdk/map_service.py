@@ -180,6 +180,7 @@ class MapService:
         self.version = claim_proto_version(version)
         self.lane_table: dict[str, Any] = {}
         self.junction_table: dict[str, Any] = {}
+        self.pnc_junction_table: dict[str, Any] = {}
         self.crosswalk_table: dict[str, Any] = {}
         self.signal_table: dict[str, Any] = {}
         self.stop_sign_table: dict[str, Any] = {}
@@ -208,6 +209,7 @@ class MapService:
         obj_table_map = [
             (map_proto.lane, self.lane_table),
             (map_proto.junction, self.junction_table),
+            (map_proto.pnc_junction, self.pnc_junction_table),
             (map_proto.crosswalk, self.crosswalk_table),
             (map_proto.signal, self.signal_table),
             (map_proto.stop_sign, self.stop_sign_table),
@@ -314,6 +316,18 @@ class MapService:
 
     def get_junction_by_id(self, junction_id: str) -> Any:
         return self.junction_table[junction_id]
+
+    def get_pnc_junction_by_id(self, pnc_junction_id: str) -> Any:
+        """Return the indexed PNCJunction protobuf with the requested ID.
+
+        Distinct from ``Junction``/``junction_table``: Apollo's scenario
+        dispatcher gates ``bare_intersection_unprotected`` on
+        ``pnc_junction_overlap``, not the regular ``Junction`` message (see
+        ``dispatch_extractor.py`` in the mining pipeline). Like ``Junction``,
+        ``PNCJunction`` has no direct lane field -- lane membership is
+        resolved via ``overlap_id`` intersection against ``lane_table``.
+        """
+        return self.pnc_junction_table[pnc_junction_id]
 
     def get_crosswalk_by_id(self, crosswalk_id: str) -> Any:
         return self.crosswalk_table[crosswalk_id]
