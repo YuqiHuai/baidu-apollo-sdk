@@ -42,6 +42,23 @@ class ApolloContainer:
         self.version: ApolloVersion = validate_apollo_version(version)
         self.docker_client = docker.from_env()
 
+    def close(self) -> None:
+        """Release this wrapper's Docker API client and its connection pool.
+
+        Every ``ApolloContainer(...)`` construction opens a fresh
+        ``docker.from_env()`` client with its own connection pool to the
+        Docker daemon. A caller that rebuilds the whole stack once per trial
+        (e.g. a full container reset) and never releases the previous
+        wrapper leaks that pool's sockets indefinitely -- confirmed live
+        alongside the ``CyberBridge`` socket leak this mirrors.
+        """
+        try:
+            self.docker_client.close()
+        except Exception:  # noqa: BLE001
+            logger.debug(
+                "{} docker client close failed", container_log_prefix(self)
+            )
+
     def start(self, verbose: bool = False) -> None:
         """Start the Apollo development container.
 
@@ -108,6 +125,29 @@ class ApolloContainer:
         except docker.errors.NotFound:
             return
         container.stop(timeout=timeout)
+
+    def restart(self, timeout: int = 30) -> None:
+        """Restart the container process itself (not a rebuild).
+
+        This is the OS-level `docker restart`, not the packaged
+        `v{version}_dev_start.sh` script `start()` runs -- it is fast
+        (sub-second) but leaves the container containing none of Apollo's own
+        processes: no Dreamview, no cyber_bridge, no cyber nodes. Callers
+        that need a running Apollo, not just a running container, must bring
+        it back up themselves afterward (see
+        `mozart.apollo.agent.build_apollo_stack`, which already handles a
+        container that reports "running" but is otherwise empty).
+
+        Args:
+            timeout: Seconds to wait for a graceful stop before SIGKILL, as
+                part of the restart.
+
+        Raises:
+            docker.errors.NotFound: If the container does not exist.
+        """
+        logger.info("{} restart container", container_log_prefix(self))
+        container = self.docker_client.containers.get(self.container_name)
+        container.restart(timeout=timeout)
 
     @property
     def container_name(self) -> str:

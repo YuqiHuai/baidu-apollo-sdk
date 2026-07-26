@@ -46,6 +46,10 @@ class FakeDockerContainer:
     stream_output: list[bytes] = field(
         default_factory=lambda: [b"hello", b" world"]
     )
+    restart_timeouts: list[int] = field(default_factory=list)
+
+    def restart(self, timeout: int) -> None:
+        self.restart_timeouts.append(timeout)
 
     def exec_run(
         self,
@@ -86,6 +90,10 @@ class FakeContainerCollection:
 class FakeDockerClient:
     def __init__(self, container: FakeDockerContainer | None) -> None:
         self.containers = FakeContainerCollection(container)
+        self.close_calls = 0
+
+    def close(self) -> None:
+        self.close_calls += 1
 
 
 def apollo_container(
@@ -136,6 +144,28 @@ def test_is_running_returns_false_for_stopped_container(
     assert container.is_running() is False
 
 
+def test_restart_calls_docker_container_restart_with_timeout(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    docker_container = FakeDockerContainer()
+    container = apollo_container(monkeypatch, docker_container)
+
+    container.restart(timeout=15)
+
+    assert docker_container.restart_timeouts == [15]
+
+
+def test_restart_raises_when_container_is_missing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    container = apollo_container(monkeypatch, None)
+    fake_client = FakeDockerClient(None)
+    monkeypatch.setattr(container, "docker_client", fake_client)
+
+    with pytest.raises(docker.errors.NotFound):
+        container.restart()
+
+
 def test_is_running_returns_false_when_container_is_missing(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -144,6 +174,21 @@ def test_is_running_returns_false_when_container_is_missing(
     monkeypatch.setattr(container, "docker_client", fake_client)
 
     assert container.is_running() is False
+
+
+def test_close_releases_the_docker_client(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A caller that rebuilds the whole stack (e.g. a full container reset
+    between trials) must be able to release the old wrapper's docker client
+    -- otherwise every rebuild leaks that client's connection pool sockets
+    forever, alongside the CyberBridge fd leak this mirrors."""
+    container = apollo_container(monkeypatch)
+    fake_client = container.docker_client
+
+    container.close()
+
+    assert fake_client.close_calls == 1
 
 
 def test_ip_address_returns_container_ip(
