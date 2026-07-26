@@ -366,6 +366,7 @@ class CyberBridge:
                 break
 
         self.spinning = False
+        self._close_conn()
 
     def spin(self) -> None:
         """Start the socket receive loop in a background thread."""
@@ -382,8 +383,30 @@ class CyberBridge:
         self.t.start()
 
     def stop(self) -> None:
-        """Stop the socket receive loop and wait for its thread to exit."""
+        """Stop the socket receive loop, wait for its thread to exit, and
+        release the underlying socket.
+
+        Every caller that builds a fresh ``CyberBridge`` (e.g. a full
+        container reset between trials) leaves the previous one's socket fd
+        open forever unless this closes it -- confirmed live: a route-
+        discovery sweep that rebuilds the whole Apollo stack once per trial
+        leaked one fd per trial until the process exceeded ``select()``'s
+        1024-fd ``FD_SETSIZE`` limit, permanently breaking localization
+        seeding (and therefore every trial) for the rest of the run.
+        """
         logger.info("{} bridge stop", container_log_prefix(self.container))
         self.spinning = False
         if self.t is not None:
             self.t.join()
+        self._close_conn()
+
+    def _close_conn(self) -> None:
+        """Close the bridge socket if it is still open. Idempotent and safe
+        to call from both a spin-thread failure path and an explicit
+        ``stop()`` -- whichever happens first must not raise for the other."""
+        try:
+            self.conn.close()
+        except OSError:
+            logger.debug(
+                "{} bridge conn close failed", container_log_prefix(self.container)
+            )
