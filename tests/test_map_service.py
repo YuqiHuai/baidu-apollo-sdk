@@ -100,6 +100,105 @@ def test_load_map_from_proto_indexes_yield_signs(
     assert service.get_yield_sign_by_id("yield-sign-1") == yield_sign
 
 
+def test_map_service_pickle_round_trip_rebuilds_proto_tables(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """__getstate__/__setstate__ must survive a real pickle round trip: the
+    raw protobuf tables can't be pickled directly (baidu_apollo_proto's
+    generated classes' __module__ doesn't always resolve importably), so
+    they're excluded and rebuilt from _map_proto_bytes on unpickle instead.
+    Everything else (routing_graph here) must come back unchanged."""
+    import pickle
+
+    # Class-level, not instance-level: an instance-level monkeypatch would
+    # land in service.__dict__ as an unpicklable local lambda, which is a
+    # test-setup artifact this test must not trip over.
+    monkeypatch.setattr(MapService, "build_lane_segment_kd_tree", lambda self: None)
+    map_proto = Map()
+    yield_sign = getattr(map_proto, "yield").add()
+    yield_sign.id.id = "yield-sign-1"
+    service = MapService()
+    service.load_map_from_proto(map_proto)
+    service.routing_graph.add_edge("lane-a", "lane-b", direction_type="F")
+
+    restored = pickle.loads(pickle.dumps(service, protocol=pickle.HIGHEST_PROTOCOL))
+
+    assert restored is not service
+    assert restored.version == service.version
+    assert list(restored.get_yield_signs(Point())) == ["yield-sign-1"]
+    assert restored.get_yield_sign_by_id("yield-sign-1") == yield_sign
+    assert list(restored.routing_graph.edges(data="direction_type")) == [
+        ("lane-a", "lane-b", "F")
+    ]
+
+
+def test_load_map_service_writes_and_reuses_an_on_disk_cache(
+    tmp_path: Path,
+) -> None:
+    """A second load (even in a fresh process, where the in-memory
+    __loaded_instances cache is empty) must read the pickled cache instead
+    of re-parsing the map's protobuf and rebuilding its KDTree -- confirmed
+    live as a 9-minute silent pause mid-sweep switching to a ~3700-lane map,
+    indistinguishable from a hung run."""
+    from baidu_apollo_sdk.map_service import _map_service_cache_path
+
+    map_dir = tmp_path / "borregas_ave"
+    map_dir.mkdir()
+    source = Path(DEFAULT_MAPS_DIR) / "borregas_ave" / "base_map.bin"
+    map_bin = map_dir / "base_map.bin"
+    map_bin.write_bytes(source.read_bytes())
+    cache_path = _map_service_cache_path(map_bin.resolve(), 11)
+    assert not cache_path.exists()
+
+    first = load_map_service("borregas_ave", maps_dir=tmp_path, refresh=True)
+    assert cache_path.is_file(), "expected a cache file to be written on first load"
+
+    script = f"""
+from baidu_apollo_sdk.map_service import load_map_service
+service = load_map_service("borregas_ave", maps_dir={str(tmp_path)!r})
+print(len(service.lane_table), len(service.routing_graph.edges))
+"""
+    result = subprocess.run(
+        [sys.executable, "-c", script], check=True, capture_output=True, text=True
+    )
+
+    assert result.stdout.strip() == (
+        f"{len(first.lane_table)} {len(first.routing_graph.edges)}"
+    )
+
+
+def test_load_map_service_cache_invalidates_on_source_change(
+    tmp_path: Path,
+) -> None:
+    """A stale cache (source file modified after the cache was written) must
+    be rebuilt, not silently served -- otherwise a real map data update
+    would keep loading whatever was cached from before the change."""
+    from baidu_apollo_sdk.map_service import _map_service_cache_path
+
+    map_dir = tmp_path / "borregas_ave"
+    map_dir.mkdir()
+    source = Path(DEFAULT_MAPS_DIR) / "borregas_ave" / "base_map.bin"
+    map_bin = map_dir / "base_map.bin"
+    map_bin.write_bytes(source.read_bytes())
+
+    load_map_service("borregas_ave", maps_dir=tmp_path, refresh=True)
+    cache_path = _map_service_cache_path(map_bin.resolve(), 11)
+    stale_cache = cache_path.read_bytes()
+
+    # Touch the source forward in time without changing its content --
+    # enough to invalidate the mtime-keyed cache.
+    import os
+    import time
+
+    os.utime(map_bin, ns=(time.time_ns(), time.time_ns() + 10**9))
+
+    load_map_service("borregas_ave", maps_dir=tmp_path, refresh=True)
+
+    assert cache_path.read_bytes() != stale_cache, (
+        "cache must be rewritten, not reused, once the source file's mtime moves"
+    )
+
+
 def test_kdtree_queries_nearest_geometry() -> None:
     near = LineString([(0, 0), (1, 0)])
     far = LineString([(10, 0), (11, 0)])

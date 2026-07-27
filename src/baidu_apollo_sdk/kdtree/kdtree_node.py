@@ -36,10 +36,17 @@ class KDTreeNode:
     left_subnode_: "KDTreeNode | None"
     right_subnode_: "KDTreeNode | None"
 
+    _bounds_cache: dict[BaseGeometry, tuple[float, float, float, float]]
+
     def __init__(
-        self, objects: list[BaseGeometry], params: KDTreeParams, depth: int
+        self,
+        objects: list[BaseGeometry],
+        params: KDTreeParams,
+        depth: int,
+        bounds_cache: dict[BaseGeometry, tuple[float, float, float, float]],
     ) -> None:
         self.depth_ = depth
+        self._bounds_cache = bounds_cache
         assert len(objects) > 0
 
         self.num_objects = 0
@@ -66,9 +73,13 @@ class KDTreeNode:
         if self.split_to_sub_nodes(objects, params):
             lobjects, robjects = self.partition_objects(objects)
             if len(lobjects) > 0:
-                self.left_subnode_ = KDTreeNode(lobjects, params, depth + 1)
+                self.left_subnode_ = KDTreeNode(
+                    lobjects, params, depth + 1, bounds_cache
+                )
             if len(robjects) > 0:
-                self.right_subnode_ = KDTreeNode(robjects, params, depth + 1)
+                self.right_subnode_ = KDTreeNode(
+                    robjects, params, depth + 1, bounds_cache
+                )
         else:
             self.init_objects(objects)
 
@@ -210,7 +221,7 @@ class KDTreeNode:
         self.max_x_ = float("-inf")
         self.max_y_ = float("-inf")
         for obj in objects:
-            minx, miny, maxx, maxy = obj.bounds
+            minx, miny, maxx, maxy = self._bounds_cache[obj]
             self.min_x_ = min(minx, self.min_x_)
             self.max_x_ = max(maxx, self.max_x_)
             self.min_y_ = min(miny, self.min_y_)
@@ -255,7 +266,7 @@ class KDTreeNode:
         other_objects = list()
 
         for obj in objects:
-            minx, miny, maxx, maxy = obj.bounds
+            minx, miny, maxx, maxy = self._bounds_cache[obj]
 
             if self.partition_ == Partition.PARTITION_X:
                 _max, _min = maxx, minx
@@ -278,28 +289,28 @@ class KDTreeNode:
         self.objects_sorted_by_max_ = list(objects)
         self.objects_sorted_by_min_.sort(
             key=lambda x: (
-                x.bounds[0]
+                self._bounds_cache[x][0]
                 if self.partition_ == Partition.PARTITION_X
-                else x.bounds[1]
+                else self._bounds_cache[x][1]
             )
         )
         self.objects_sorted_by_max_.sort(
             key=lambda x: (
-                x.bounds[2]
+                self._bounds_cache[x][2]
                 if self.partition_ == Partition.PARTITION_X
-                else x.bounds[3]
+                else self._bounds_cache[x][3]
             ),
             reverse=True,
         )
         self.objects_sorted_by_min_bound_ = list()
         for obj in self.objects_sorted_by_min_:
-            minx, miny, maxx, maxy = obj.bounds
+            minx, miny, maxx, maxy = self._bounds_cache[obj]
             self.objects_sorted_by_min_bound_.append(
                 minx if self.partition_ == Partition.PARTITION_X else miny
             )
         self.objects_sorted_by_max_bound_ = list()
         for obj in self.objects_sorted_by_max_:
-            minx, miny, maxx, maxy = obj.bounds
+            minx, miny, maxx, maxy = self._bounds_cache[obj]
             self.objects_sorted_by_max_bound_.append(
                 maxx if self.partition_ == Partition.PARTITION_X else maxy
             )

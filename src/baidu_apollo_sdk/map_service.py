@@ -1,6 +1,7 @@
 # /apollo/modules/map/hdmap/hdmap_impl.h
 # /apollo/modules/map/hdmap/hdmap_impl.cc
 
+import pickle
 from collections.abc import Iterable
 from dataclasses import dataclass
 from importlib import import_module
@@ -55,6 +56,10 @@ def list_hd_maps(maps_dir: str | Path = DEFAULT_MAPS_DIR) -> list[str]:
     )
 
 
+def _map_service_cache_path(map_bin: Path, version: int) -> Path:
+    return map_bin.with_name(f"{map_bin.stem}.v{version}.mozart_cache.pkl")
+
+
 def load_map_service(
     map_name: str,
     *,
@@ -62,17 +67,60 @@ def load_map_service(
     version: int = 11,
     refresh: bool = False,
 ) -> "MapService":
-    """Load an HD map from an asset directory and cache it in memory."""
+    """Load an HD map from an asset directory, cached in memory (per
+    process) and on disk (across processes, via pickle).
+
+    Parsing a large map's protobuf and building its lane-segment KDTree
+    (~3700 lanes for sunnyvale_big_loop) cost ~45-75s cold, even after
+    fixing the KDTree builder's redundant `.bounds` recomputation (see
+    kdtree_node.py) -- confirmed live as a 9-minute silent pause mid-sweep,
+    indistinguishable from a hung run. The in-memory cache below only helps
+    *within* one process; every fresh `uv run mozart ...` paid the full
+    cost again regardless. The on-disk pickle cache (keyed on the source
+    file's mtime, so a map data update invalidates it automatically) turns
+    that into a once-per-map-per-machine cost instead of
+    once-per-process -- see MapService.__getstate__/__setstate__ for why
+    the raw protobuf tables specifically are excluded from the pickle and
+    cheaply rebuilt instead of pickled directly.
+    """
     map_bin = (Path(maps_dir) / map_name / "base_map.bin").resolve()
     if not map_bin.is_file():
         raise FileNotFoundError(f"Requested map does not exist: {map_bin}")
 
     key = (map_bin, version)
-    if refresh or key not in __loaded_instances:
+    if not refresh and key in __loaded_instances:
+        return __loaded_instances[key]
+
+    source_mtime_ns = map_bin.stat().st_mtime_ns
+    cache_path = _map_service_cache_path(map_bin, version)
+    instance: MapService | None = None
+    if not refresh and cache_path.is_file():
+        try:
+            with cache_path.open("rb") as stream:
+                cached = pickle.load(stream)
+            if cached["source_mtime_ns"] == source_mtime_ns:
+                instance = cached["map_service"]
+        except Exception:  # noqa: BLE001
+            instance = None  # corrupt or incompatible cache -- rebuild
+
+    if instance is None:
         instance = MapService(version=version)
         instance.load_map_from_file(map_bin)
-        __loaded_instances[key] = instance
-    return __loaded_instances[key]
+        try:
+            with cache_path.open("wb") as stream:
+                pickle.dump(
+                    {
+                        "source_mtime_ns": source_mtime_ns,
+                        "map_service": instance,
+                    },
+                    stream,
+                    protocol=pickle.HIGHEST_PROTOCOL,
+                )
+        except Exception:  # noqa: BLE001
+            pass  # the cache is an optimization, not a correctness requirement
+
+    __loaded_instances[key] = instance
+    return instance
 
 
 def _map_message_type(version: int) -> type[Message]:
@@ -170,6 +218,21 @@ class MapService:
 
     FLAGS_min_length_for_lane_change = 1.0
 
+    # Tables holding raw protobuf message objects, as opposed to the plain
+    # Python / shapely / networkx structures derived from them. Excluded
+    # from __getstate__ and rebuilt in __setstate__ -- see there for why.
+    _PROTO_TABLE_NAMES = (
+        "lane_table",
+        "junction_table",
+        "pnc_junction_table",
+        "crosswalk_table",
+        "signal_table",
+        "stop_sign_table",
+        "yield_sign_table",
+        "overlap_table",
+        "parking_space_table",
+    )
+
     lane_kdtree: KDTree
     junction_kdtree: KDTree
     crosswalk_kdtree: KDTree
@@ -178,6 +241,7 @@ class MapService:
 
     def __init__(self, version: int = 11) -> None:
         self.version = claim_proto_version(version)
+        self._map_proto_bytes: bytes = b""
         self.lane_table: dict[str, Any] = {}
         self.junction_table: dict[str, Any] = {}
         self.pnc_junction_table: dict[str, Any] = {}
@@ -206,6 +270,21 @@ class MapService:
         self.load_map_from_proto(map_proto)
 
     def load_map_from_proto(self, map_proto: Any) -> None:
+        # Kept as bytes (not the live message) so __getstate__ can pickle it
+        # instead of the tables __populate_tables_from below fills in --
+        # see __getstate__/__setstate__.
+        self._map_proto_bytes = map_proto.SerializeToString()
+        self._populate_tables(map_proto)
+
+        self.build_lane_segment_kd_tree()
+        self.build_routing_graph()
+        self.find_non_junction_lanes()
+        # self.build_junction_polygon_kd_tree()
+        # self.build_signal_segment_kd_tree()
+        # self.build_crosswalk_polygon_kd_tree()
+        # self.build_stop_sign_segment_kd_tree()
+
+    def _populate_tables(self, map_proto: Any) -> None:
         obj_table_map = [
             (map_proto.lane, self.lane_table),
             (map_proto.junction, self.junction_table),
@@ -221,13 +300,32 @@ class MapService:
             for obj in objects:
                 table_name[obj.id.id] = obj
 
-        self.build_lane_segment_kd_tree()
-        self.build_routing_graph()
-        self.find_non_junction_lanes()
-        # self.build_junction_polygon_kd_tree()
-        # self.build_signal_segment_kd_tree()
-        # self.build_crosswalk_polygon_kd_tree()
-        # self.build_stop_sign_segment_kd_tree()
+    def __getstate__(self) -> dict[str, Any]:
+        """Exclude the raw protobuf tables from the pickle payload.
+
+        baidu_apollo_proto's generated message classes' `__module__` does
+        not always resolve to an importable path (it reflects the
+        bazel-relative package the .proto was compiled under, not the
+        `baidu_apollo_proto.v{version}.` namespace package wrapping it),
+        which makes pickling them directly fail with "Can't pickle ...:
+        import of module ... failed". `_map_proto_bytes` (the original
+        `Map` message, serialized once at load time) is pickled instead,
+        and the tables are cheaply rebuilt from it in __setstate__.
+        Everything else here -- the KDTree and routing graphs, the
+        expensive part to rebuild -- pickles as-is.
+        """
+        state = self.__dict__.copy()
+        for name in self._PROTO_TABLE_NAMES:
+            state.pop(name, None)
+        return state
+
+    def __setstate__(self, state: dict[str, Any]) -> None:
+        self.__dict__.update(state)
+        for name in self._PROTO_TABLE_NAMES:
+            setattr(self, name, {})
+        map_proto = _map_message_type(self.version)()
+        map_proto.ParseFromString(self._map_proto_bytes)
+        self._populate_tables(map_proto)
 
     def get_lanes(
         self, point: Point | None = None, distance: float = 0.0

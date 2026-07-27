@@ -15,7 +15,17 @@ class KDTree:
     ) -> None:
         if not objects:
             raise ValueError("No objects provided")
-        self.root = KDTreeNode(objects, params, 0)
+        # Computed once here and threaded through every KDTreeNode rather
+        # than re-read via `obj.bounds` at every tree level: a geometry's
+        # bounds are immutable, but node construction (compute_boundary,
+        # partition_objects, init_objects) otherwise re-derives them from
+        # scratch at every ancestor node an object passes through plus
+        # several more times at its leaf -- confirmed live building
+        # sunnyvale_big_loop's ~34k lane segments: 18M `.bounds` calls for
+        # 34k objects, dominating map load time (~9 minutes wall-clock in a
+        # live sweep, ~62s of a 113s cProfile run in isolation).
+        bounds_cache = {obj: obj.bounds for obj in objects}
+        self.root = KDTreeNode(objects, params, 0, bounds_cache)
 
     def get_nearest_object(self, point: Point) -> BaseGeometry:
         if self.root is None:
