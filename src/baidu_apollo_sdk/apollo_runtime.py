@@ -78,16 +78,27 @@ class ApolloRuntime:
     def start_dreamview(self, stream: bool = False) -> None:
         """Start Dreamview in the container.
 
+        Runs as root: Apollo's own module processes (dreamview, monitor,
+        mainboard) run as root inside the container, and CyberRT's
+        shared-memory transport is permission-sensitive across UIDs. A
+        Dreamview started as a different user comes up and serves its own
+        frontend fine, but SimControl (embedded in the same process) then
+        publishes on channels a root-run reader (or another root-run Apollo
+        module) cannot see -- e.g. every `cyber_channel echo` in this SDK --
+        which looks exactly like SimControl never placing the vehicle at all.
+
         Args:
             stream: Whether to stream command output.
         """
         logger.info("{} start dreamview", container_log_prefix(self.container))
         self.container.exec_command(
-            "bash scripts/bootstrap.sh start", stream=stream
+            "bash scripts/bootstrap.sh start", stream=stream, user="root"
         )
 
     def start_dreamview_plus(self, stream: bool = False) -> None:
         """Start Dreamview Plus in the container.
+
+        Runs as root -- see `start_dreamview`.
 
         Args:
             stream: Whether to stream command output.
@@ -96,7 +107,7 @@ class ApolloRuntime:
             "{} start dreamview plus", container_log_prefix(self.container)
         )
         self.container.exec_command(
-            "bash scripts/bootstrap.sh start_plus", stream=stream
+            "bash scripts/bootstrap.sh start_plus", stream=stream, user="root"
         )
 
     def bridge_process_users(self) -> list[str]:

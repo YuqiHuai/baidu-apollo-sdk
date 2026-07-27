@@ -106,12 +106,18 @@ def test_build_runs_apollo_build_command() -> None:
 
 
 def test_bootstrap_starts_dreamview_for_v7() -> None:
+    """Dreamview must start as root: it (and SimControl, embedded in the
+    same process) is otherwise a different UID than every other root-run
+    Apollo module, and CyberRT's shared-memory transport is
+    permission-sensitive across UIDs -- a non-root Dreamview looks like it
+    started fine but SimControl's published channels are then invisible to
+    everything else."""
     container = FakeContainer(version=7)
 
     runtime_for(container).bootstrap(stream=True)
 
     assert container.commands == [
-        CommandCall("bash scripts/bootstrap.sh start", stream=True),
+        CommandCall("bash scripts/bootstrap.sh start", stream=True, user="root"),
     ]
 
 
@@ -121,7 +127,9 @@ def test_bootstrap_starts_dreamview_plus_for_v11() -> None:
     runtime_for(container).bootstrap(stream=True)
 
     assert container.commands == [
-        CommandCall("bash scripts/bootstrap.sh start_plus", stream=True),
+        CommandCall(
+            "bash scripts/bootstrap.sh start_plus", stream=True, user="root"
+        ),
     ]
 
 
