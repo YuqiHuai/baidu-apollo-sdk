@@ -379,6 +379,12 @@ function main() {
     local local_volumes=
     setup_devices_and_mount_local_volumes local_volumes
 
+    # Do NOT re-enable these while several Mozart workers share this host.
+    # restart_map_volume_if_needed does `docker volume rm` and repopulates a
+    # volume named apollo_map_volume-<map>_${USER}, and every worker runs as
+    # the same $USER -- so worker 2 starting up would wipe and rebuild the map
+    # volume worker 1's live trial is reading. Maps come from the per-worker
+    # checkout's modules/map/data/ instead, which is properly isolated.
     # mount_map_volumes
     # mount_other_volumes
 
