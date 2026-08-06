@@ -293,8 +293,23 @@ class CyberBridge:
                 return
 
             op = self._buffer[0]
-            logger.debug(
-                "{} rx op {}", container_log_prefix(self.container), op
+            # Lazily evaluated, and that is load-bearing rather than tidiness:
+            # ``container_log_prefix`` reads ``container.ip_address``, which is
+            # a property that makes a live round-trip to the Docker daemon
+            # (~0.5-0.9 ms). Passed as an eager argument it ran for *every
+            # received packet* even at INFO level, where the formatted line is
+            # then discarded -- throttling this receive loop below Apollo's
+            # ~100 Hz localization rate. The socket backlog that built up was
+            # drained FIFO, so the broker kept republishing ever-older poses at
+            # a perfectly steady 25 Hz: measured live at 1.8 MB pending in the
+            # kernel buffer and ~3.8 s of pose staleness (tens of metres of
+            # apparent position error) before this was made lazy.
+            # Every argument must be a callable: loguru's lazy mode calls all
+            # of them, not just the ones that happen to be expensive.
+            logger.opt(lazy=True).debug(
+                "{} rx op {}",
+                lambda: container_log_prefix(self.container),
+                lambda: op,
             )
 
             # Need at least 1 + 4 bytes for topic length
@@ -311,10 +326,12 @@ class CyberBridge:
                 return
 
             topic = self._buffer[offset : offset + topic_length]
-            logger.debug(
+            # Lazy for the same reason as the ``rx op`` line above -- this is
+            # the per-packet hot path, and the prefix costs a Docker API call.
+            logger.opt(lazy=True).debug(
                 "{} rx topic {}",
-                container_log_prefix(self.container),
-                topic.decode("ascii"),
+                lambda: container_log_prefix(self.container),
+                lambda: topic.decode("ascii"),
             )
             offset += topic_length
 

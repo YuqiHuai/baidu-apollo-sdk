@@ -132,10 +132,16 @@ class CyberClient:
             self._publishers.add(ch)
             time.sleep(self.publisher_registration_delay)
 
-        logger.debug(
+        # Lazy: ``container_log_prefix`` reads ``container.ip_address``, a live
+        # Docker API round-trip. This is a hot path -- the obstacle broker
+        # publishes to every instance on every tick (25 Hz x N instances) --
+        # and passing the prefix eagerly made each tick pay that cost per sink
+        # even at INFO level, where the line is discarded. Every argument must
+        # be a callable: loguru's lazy mode calls all of them.
+        logger.opt(lazy=True).debug(
             "{} publish {}",
-            container_log_prefix(self.bridge.container),
-            ch,
+            lambda: container_log_prefix(self.bridge.container),
+            lambda: ch,
         )
         self.bridge.publish(topic, msg)
 
