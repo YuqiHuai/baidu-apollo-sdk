@@ -18,7 +18,7 @@ from baidu_apollo_sdk.dreamview import Dreamview
 from baidu_apollo_sdk.dreamview.v7 import DreamviewV7
 from baidu_apollo_sdk.map_service import DEFAULT_MAPS_DIR, MapService
 
-APOLLO_V7_PATH = Path("/home/yuqi/ResearchWorkspace/ICSE_2027/MozartTest-ICSE-27/baidu-apollo/apollo-7.0.0")
+APOLLO_V7_PATH = Path("/home/yuqi/ResearchWorkspace/ICSE_2027/baidu-apollo/apollo-7.0.0")
 SIM_MAP_PATH = (
     DEFAULT_MAPS_DIR / "sunnyvale_with_two_offices" / "sim_map.bin"
 )
